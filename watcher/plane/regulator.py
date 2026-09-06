@@ -10,7 +10,7 @@ from pathlib import Path
 from xphi.arch.event.next import LogEvent, next_phase_id
 from xphi.kernel.space.bind.resolver import resolve_path
 
-from xphi.kernel.phase.runtime.flow.meter import default_telemetry
+from xphi.state.runtime.flow.meter import default_telemetry
 from xphi.watcher.plane.observer.event import EventObserver
 from xphi.watcher.plane.surface.tunnel import TunnelSurface
 from xphi.watcher.plane.surface.console import ConsoleSurface

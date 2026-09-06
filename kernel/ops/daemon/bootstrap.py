@@ -16,10 +16,10 @@ from xphi.arch.contract.registry.unified import registry
 
 from xphi.kernel.ops.daemon.base import AbstractDaemon
 from xphi.kernel.ops.task.supervisor import TaskSupervisor, Dispatcher
-from xphi.kernel.phase.runtime.context import RuntimeContext
-from xphi.kernel.phase.runtime.sensor import SurfaceSensor
+from xphi.state.runtime.context import RuntimeContext
+from xphi.state.runtime.sensor import SurfaceSensor
 from xphi.watcher.plane.emitter import get_emitter
-from xphi.kernel.phase.runtime.flow.cont import LoopCarrier, DynamicsXe
+from xphi.state.runtime.flow.cont import LoopCarrier, DynamicsXe
 
 log = get_emitter("daemon.bootstrap")
 SENSOR_INTERVAL = 1.0

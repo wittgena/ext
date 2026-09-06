@@ -6,7 +6,7 @@ from typing import Optional, Any, List, Tuple
 
 from xphi.watcher.plane.emitter import get_emitter
 from xphi.kernel.space.topos.tunnel.config import BackendProtocol, resolve_default_config, parse_connection_urls
-from xphi.kernel.dphi.method import DphiMethod  # DphiMethod 임포트
+from xphi.kernel.wasm.method import DphiMethod  # DphiMethod 임포트
 
 log = get_emitter("tunnel.flare")
 

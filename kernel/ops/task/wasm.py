@@ -13,8 +13,8 @@ from contextlib import suppress
 from xphi.kernel.ops.daemon.base import AbstractDaemon
 from xphi.kernel.space.bind.resolver import resolve_path
 from xphi.watcher.plane.emitter import get_emitter, flow_scope
-from xphi.kernel.dphi.cgroup import CgroupPolicy
-from xphi.kernel.dphi.method import DphiMethod
+from xphi.kernel.wasm.cgroup import CgroupPolicy
+from xphi.kernel.wasm.method import DphiMethod
 from xphi.kernel.ops.task.strategy import ExecutionStrategy
 
 TIME_ROOT = resolve_path("time")
@@ -62,7 +62,7 @@ class TaskWasm(AbstractDaemon):
 
     async def _init_wasm_pool(self):
         self.log.info(f"[{self.node_id}] Pre-warming {self.concurrency_limit} WASM instances...")
-        from xphi.kernel.phase.inter.wasm import WasmInterpreter
+        from xphi.state.inter.wasm import WasmInterpreter
         
         for _ in range(self.concurrency_limit):
             interp = WasmInterpreter(

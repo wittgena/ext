@@ -8,8 +8,8 @@ import json
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 
-from xphi.kernel.phase.state.spec import TransRule, NodeType
-from xphi.kernel.dphi.ledger.consensus import KernelLedger
+from xphi.state.phase.spec import TransRule, NodeType
+from xphi.state.ledger.consensus import KernelLedger
 from xphi.watcher.server.stream.schema import (
     LogicStream, 
     StreamMetadata, 

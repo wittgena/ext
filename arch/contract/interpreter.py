@@ -10,7 +10,7 @@ from typing import (
 
 from xphi.arch.event.psi import PsiCarrier, PhaseField
 from xphi.watcher.plane.emitter import get_emitter
-from xphi.kernel.dphi.method import DphiMethod
+from xphi.kernel.wasm.method import DphiMethod
 
 log = get_emitter("contract.interpreter")
 

@@ -7,7 +7,7 @@ from collections import defaultdict
 from typing import Any, Dict, Optional
 
 from xphi.watcher.server.stream.schema import LogicStream as IngressLogicStream
-from xphi.kernel.dphi.ledger.consensus import KernelLedger, LogicStream as KernelLogicStream, SealedKernel, LedgerRole
+from xphi.state.ledger.consensus import KernelLedger, LogicStream as KernelLogicStream, SealedKernel, LedgerRole
 from xphi.watcher.plane.emitter import get_emitter
 
 log = get_emitter("mesh.gateway", phase="KERNEL")

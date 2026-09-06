@@ -10,10 +10,10 @@ from typing import Tuple, Optional
 from dataclasses import asdict
 
 from xphi.kernel.space.bind.resolver import resolve_path
-from xphi.kernel.phase.inter.wasm import WasmInterpreter
-from xphi.kernel.dphi.adapter.sign import LedgerAuthAdapter
-from xphi.kernel.dphi.cgroup import CgroupPolicy
-from xphi.kernel.dphi.ledger.consensus import KernelLedger, KernelCommit, LedgerRole
+from xphi.state.inter.wasm import WasmInterpreter
+from xphi.kernel.wasm.adapter.sign import LedgerAuthAdapter
+from xphi.kernel.wasm.cgroup import CgroupPolicy
+from xphi.state.ledger.consensus import KernelLedger, KernelCommit, LedgerRole
 
 from xphi.watcher.plane.emitter import get_emitter
 from xphi.watcher.tracer.bound import BaseTracer

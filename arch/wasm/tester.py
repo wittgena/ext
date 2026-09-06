@@ -10,7 +10,7 @@ from xphi.kernel.space.topos.tunnel.factory import TunnelFactory
 from xphi.kernel.space.bind.resolver import resolve_path
 from xphi.kernel.ops.task.supervisor import TaskSupervisor
 from xphi.kernel.ops.task.wasm import TaskWasm
-from xphi.kernel.dphi.broker import DphiBroker
+from xphi.kernel.wasm.broker import DphiBroker
 from xphi.watcher.plane.emitter import get_emitter, flow_scope
 
 log = get_emitter("wasm.tester")

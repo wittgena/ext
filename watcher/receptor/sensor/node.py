@@ -15,10 +15,10 @@ from xphi.arch.event.psi import PsiCarrier, PsiEvent
 from xphi.arch.contract.interface import IPhaseField, ICriticalDetector, ISystemRegime, IPhaseAtor, IDynamicsKernel
 from xphi.arch.contract.phase.flow import PhaseFlow, Transduction
 
-from xphi.kernel.dphi.adapter.state import StateAdapter
-from xphi.kernel.dphi.adapter.ator import AtorAdapter, NodeState, KernelDelta, NodeRole
-from xphi.kernel.dphi.broker import DphiBroker
-from xphi.kernel.dphi.method import DphiMethod
+from xphi.kernel.wasm.adapter.state import StateAdapter
+from xphi.kernel.wasm.adapter.ator import AtorAdapter, NodeState, KernelDelta, NodeRole
+from xphi.kernel.wasm.broker import DphiBroker
+from xphi.kernel.wasm.method import DphiMethod
 from xphi.watcher.plane.emitter import get_emitter
 
 log_node = get_emitter("contract.node")

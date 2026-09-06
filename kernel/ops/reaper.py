@@ -9,7 +9,7 @@ from typing import List, Set
 from redis.asyncio import Redis
 import psutil
 
-from xphi.kernel.phase.reactor import PhaseReactor
+from xphi.state.phase.reactor import PhaseReactor
 from xphi.kernel.ops.task.supervisor import TaskSupervisor
 from xphi.watcher.plane.emitter import get_emitter
 

@@ -6,16 +6,16 @@ from typing import Optional
 from xphi.arch.event.next import LogEvent
 from xphi.arch.event.psi import PsiEvent, PsiCarrier, CarrierType
 from xphi.arch.event.bus import AsyncEventBus
-from xphi.kernel.phase.runtime.executor.base import BaseExecutor
+from xphi.state.runtime.executor.base import BaseExecutor
 from xphi.arch.contract.registry.unified import registry
 
 from xphi.kernel.space.topos.tunnel.factory import TunnelFactory
-from xphi.kernel.phase.runtime.executor.swarm import SwarmExecutor
-from xphi.kernel.phase.runtime.flow.executor import FlowExecutor
-from xphi.kernel.phase.reactor import PhaseReactor
-from xphi.kernel.phase.runtime.node import NodeRuntime
-from xphi.kernel.dphi.ledger.consensus import KernelLedger
-from xphi.kernel.dphi.broker import DphiBroker
+from xphi.state.runtime.executor.swarm import SwarmExecutor
+from xphi.state.runtime.flow.executor import FlowExecutor
+from xphi.state.phase.reactor import PhaseReactor
+from xphi.state.runtime.node import NodeRuntime
+from xphi.state.ledger.consensus import KernelLedger
+from xphi.kernel.wasm.broker import DphiBroker
 
 from xphi.watcher.plane.observer.event import EventObserver
 from xphi.watcher.plane.emitter import get_emitter

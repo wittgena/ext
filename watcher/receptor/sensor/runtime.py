@@ -9,16 +9,16 @@ from pydantic import BaseModel, Field, model_validator, field_validator
 from xphi.arch.contract.discovery import discover_modules
 from xphi.arch.event.psi import PsiCarrier, PsiEvent
 from xphi.arch.contract.registry.unified import contract, registry
-from xphi.kernel.phase.runtime.executor.base import BaseExecutor
+from xphi.state.runtime.executor.base import BaseExecutor
 
 from xphi.kernel.space.bind.resolver import find_current_self
-from xphi.kernel.phase.runtime.node import NodeRuntime
-from xphi.kernel.phase.runtime.flow.cont import LoopCarrier, XeCont
+from xphi.state.runtime.node import NodeRuntime
+from xphi.state.runtime.flow.cont import LoopCarrier, XeCont
 from xphi.kernel.ops.daemon.base import AbstractDaemon
-from xphi.kernel.dphi.broker import DphiBroker
-from xphi.kernel.dphi.adapter.state import StateAdapter
-from xphi.kernel.dphi.adapter.sign import LedgerAuthAdapter
-from xphi.kernel.dphi.adapter.ator import AtorAdapter, ToposSignal, ManifoldState, NodeRole, ToposActionType
+from xphi.kernel.wasm.broker import DphiBroker
+from xphi.kernel.wasm.adapter.state import StateAdapter
+from xphi.kernel.wasm.adapter.sign import LedgerAuthAdapter
+from xphi.kernel.wasm.adapter.ator import AtorAdapter, ToposSignal, ManifoldState, NodeRole, ToposActionType
 from xphi.watcher.plane.emitter import get_emitter
 
 log = get_emitter("ator.runtime")

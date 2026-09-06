@@ -85,7 +85,7 @@ def build_system_topos() -> List[TopologicalStructure]:
 
     watcher = []
     with suppress(ImportError): import xphi.kernel.resonance as m; watcher.append(m.__name__)
-    with suppress(ImportError): import xphi.kernel.dphi.ledger.consensus as m; watcher.append(m.__name__)
+    with suppress(ImportError): import xphi.state.ledger.consensus as m; watcher.append(m.__name__)
     with suppress(ImportError): import xphi.kernel.singularity as m; watcher.append(m.__name__)
     if watcher: structures.append(TopologicalStructure(name="watcher.kernel", members=watcher))
 
