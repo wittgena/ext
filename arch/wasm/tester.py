@@ -1,7 +1,4 @@
 # xphi.arch.wasm.tester
-## @lineage: xphi.kernel.wasm.tester
-## @lineage: xphi.watcher.wasm.tester
-## @lineage: watcher.wasm.tester
 import sys
 import json
 import asyncio

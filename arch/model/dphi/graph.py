@@ -1,4 +1,5 @@
-# fiber.dphi.model.graph
+# xphi.arch.model.dphi.graph
+## @lineage: fiber.dphi.model.graph
 from typing import TypedDict, List, Dict, Any
 from dataclasses import dataclass, asdict, field
 

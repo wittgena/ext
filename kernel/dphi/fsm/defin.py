@@ -1,5 +1,4 @@
 # xphi.kernel.dphi.fsm.defin
-## @lineage: fiber.dphi.workflow.fsm.defin
 import hashlib
 from enum import Enum, auto
 from dataclasses import dataclass

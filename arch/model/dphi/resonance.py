@@ -1,4 +1,5 @@
-# fiber.dphi.model.resonance
+# xphi.arch.model.dphi.resonance
+## @lineage: fiber.dphi.model.resonance
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Set, Optional
 

@@ -1,11 +1,11 @@
 # xphi.arch.wasm.builder
-## @lineage: xphi.kernel.wasm.builder
-## @lineage: xphi.watcher.wasm.builder
 import os
 import shutil
 import json
 import time
+import asyncio
 from pathlib import Path
+from typing import List, Dict, Optional
 
 from xphi.kernel.space.bind.resolver import resolve_path
 from xphi.watcher.tracer.bound import BaseTracer
@@ -16,32 +16,48 @@ log = get_emitter("wasm.builder")
 THEORIA_ROOT = resolve_path("theoria")
 TIME_ROOT = resolve_path("time")
 REGISTRY_FILE = TIME_ROOT / "registry.json"
+
 WASM_PROJECTS = [
     {
         "name": "dphi",
         "env": {"RUSTFLAGS": "-C target-feature=+simd128 -C opt-level=3"}
     },
     {
-        "name": "dvm"
+        "name": "dvm",
+        "env": {"RUSTFLAGS": "-C opt-level=3"}
+    },
+    {
+        "name": "gateway", 
+        # [FIX] 컴파일 랙(Stuttering) 제거: fat -> thin 으로 변경하고 codegen-units 제한을 해제하여 멀티코어 빌드 허용
+        "env": {"RUSTFLAGS": "-C opt-level=3 -C lto=thin"}
     },
 ]
 
 
 class WasmBuilder(BaseTracer):
-    """WASM 컴파일 (Dphi, DVM) 및 Rust-Driven JSON 스키마 자동 추출 페이즈"""
-    def __init__(self, timeout: int = 120):
+    """WASM 컴파일 (Dphi, DVM, Gateway) 및 Rust-Driven JSON 스키마 자동 추출 페이즈"""
+    
+    def __init__(self, timeout: int = 120, target_projects: Optional[List[str]] = None):
         super().__init__(tracer_name="wasm.builder", timeout=timeout)
         self.build_error = ""
+        self.target_projects = target_projects
         
         cargo_path = str(Path.home() / ".cargo" / "bin")
         if cargo_path not in os.environ.get("PATH", ""):
             os.environ["PATH"] = f"{cargo_path}:{os.environ.get('PATH', '')}"
 
+    def _write_schemas_sync(self, reg_data: dict, schemas: dict) -> None:
+        with open(REGISTRY_FILE, "w", encoding="utf-8") as f:
+            json.dump(reg_data, f, separators=(',', ':'))
+            
+        schema_file = TIME_ROOT / "schema.json"
+        with open(schema_file, "w", encoding="utf-8") as f:
+            json.dump(schemas, f, separators=(',', ':'))
+
     async def generate_schema_from_rust(self) -> bool:
         self.log.info("[Builder] Extracting JSON Schema using Standard Binary...")
-        os.makedirs(TIME_ROOT, exist_ok=True)
+        await asyncio.to_thread(os.makedirs, TIME_ROOT, exist_ok=True)
         
-        # Schema 추출은 dphi 프로젝트의 bin을 사용
         dphi_dir = THEORIA_ROOT / "dphi"
         
         code, out, err = await self.boundary.run_command(
@@ -52,14 +68,11 @@ class WasmBuilder(BaseTracer):
         if code != 0:
             self.build_error = f"Schema Binary Failed (Exit code: {code})"
             self.log.error(f"[ERROR] {self.build_error}")
-            self.log.error(f"--- [Cargo STDERR] ---\n{err.strip() if err else 'No STDERR'}")
             return False
 
         try:
-            schemas = json.loads(out.strip())
-            
-            methods_schema = schemas.get("Method", {})
-            methods_list = methods_schema.get("enum", [])
+            schemas = await asyncio.to_thread(json.loads, out.strip())
+            methods_list = schemas.get("Method", {}).get("enum", [])
             
             reg_data = {
                 "generated_at": time.time(),
@@ -67,20 +80,10 @@ class WasmBuilder(BaseTracer):
                 "schema_version": "Draft-07"
             }
             
-            with open(REGISTRY_FILE, "w", encoding="utf-8") as f:
-                json.dump(reg_data, f, separators=(',', ':'))
-                
-            schema_file = TIME_ROOT / "schema.json"
-            with open(schema_file, "w", encoding="utf-8") as f:
-                json.dump(schemas, f, separators=(',', ':'))
-                
+            await asyncio.to_thread(self._write_schemas_sync, reg_data, schemas)
             self.log.info(f"[Builder] Standard Schema Extraction Complete ({len(methods_list)} methods).")
             return True
             
-        except json.JSONDecodeError as e:
-            self.log.error(f"[ERROR] Failed to decode STDOUT as JSON: {e}")
-            self.log.error(f"--- [RAW STDOUT] ---\n{out.strip() if out else 'No STDOUT'}")
-            return False
         except Exception as e:
             self.log.error(f"[ERROR] Unexpected error during schema processing: {e}")
             return False
@@ -91,18 +94,27 @@ class WasmBuilder(BaseTracer):
             self.log.error(f"[Builder] Project directory not found: {project_dir}")
             return False
 
-        # 기존 전역 환경변수 백업
+        # [CRITICAL FIX] 1. 전역 환경변수 완벽 백업
         original_env = os.environ.copy()
         
         try:
-            # 커스텀 환경변수가 있다면 현재 프로세스의 os.environ에 임시 병합
+            # 2. 파이썬 프레임워크 제약(env 파라미터 미지원) 돌파를 위해 os.environ 직접 주입
             if custom_env:
                 os.environ.update(custom_env)
-                self.log.info(f"[Builder] Applying custom env for {name}: {custom_env}")
+                self.log.info(f"[Builder] Applying env for {name}: {custom_env}")
+
+            # 3. Pest Macro 캐시 무효화를 위한 선제적 Clean (1:1 Syntax Error 재발 방지)
+            if name == "gateway":
+                self.log.info(f"[Builder] Wiping Cargo cache for '{name}' to force Pest Macro re-expansion...")
+                # env 파라미터 없이 실행
+                await self.boundary.run_command(
+                    ["cargo", "clean", "-p", name], 
+                    cwd=str(project_dir), capture=True
+                )
 
             self.log.info(f"[Builder] Compiling {name} to wasm32-unknown-unknown...")
             
-            # env 인자 없이 수정된 전역 환경변수 상태로 실행
+            # env 파라미터 없이 실행 (os.environ에 이미 적용됨)
             code, out, err = await self.boundary.run_command(
                 ["cargo", "build", "--target", "wasm32-unknown-unknown", "--release"], 
                 cwd=str(project_dir), 
@@ -113,15 +125,22 @@ class WasmBuilder(BaseTracer):
                 self.build_error = err
                 self.log.error(f"[Builder] {name} Compilation Failed:\n{err.strip() if err else 'No error message'}")
                 
-                # [REFACTOR] SIMD 환경에서 실패할 경우 Fallback (일반 컴파일 재시도)
+                # SIMD Fallback 처리
                 if custom_env and "simd128" in custom_env.get("RUSTFLAGS", ""):
                     self.log.warning(f"[Builder] SIMD Compilation failed. Retrying without SIMD optimization...")
+                    
                     os.environ.clear()
-                    os.environ.update(original_env) # 커스텀 환경변수 초기화
+                    fallback_env = original_env.copy()
+                    fallback_env["RUSTFLAGS"] = "-C opt-level=3"
+                    os.environ.update(fallback_env)
+                    
+                    # env 파라미터 없이 실행
                     code, out, err = await self.boundary.run_command(
                         ["cargo", "build", "--target", "wasm32-unknown-unknown", "--release"], 
-                        cwd=str(project_dir), capture=True
+                        cwd=str(project_dir), 
+                        capture=True
                     )
+                    
                     if code == 0:
                         self.log.info(f"[Builder] Fallback compilation successful (without SIMD).")
                         return True
@@ -133,36 +152,31 @@ class WasmBuilder(BaseTracer):
             return True
             
         finally:
-            # 명령어 실행 후 성공/실패 여부와 관계없이 원래 환경변수로 완벽히 복구
+            # 4. [매우 중요] 컴파일 성공/실패 여부와 관계없이 원래 환경변수로 완벽히 복구하여 비동기 오염 방지
             os.environ.clear()
             os.environ.update(original_env)
 
-    async def build_and_deploy(self) -> bool:
-        # 1. WASM 타겟 환경 준비
+    async def build_and_deploy(self, projects_to_build: List[Dict]) -> bool:
         await self.boundary.run_command(
             ["rustup", "target", "add", "wasm32-unknown-unknown"], 
             cwd=str(THEORIA_ROOT) 
         )
         
-        os.makedirs(TIME_ROOT, exist_ok=True)
+        await asyncio.to_thread(os.makedirs, TIME_ROOT, exist_ok=True)
 
-        # 2. 프로젝트 리스트 순회하며 컴파일 및 복사
-        for proj in WASM_PROJECTS:
+        for proj in projects_to_build:
             proj_name = proj["name"]
             proj_env = proj.get("env", None)
             proj_dir = THEORIA_ROOT / proj_name
             
-            # 컴파일 진행 (custom_env 전달)
             if not await self._compile_wasm_project(proj_dir, proj_name, proj_env):
                 return False
 
-            # 아티팩트 경로 설정
             build_file = proj_dir / "target" / "wasm32-unknown-unknown" / "release" / f"{proj_name}.wasm"
             dest_file = TIME_ROOT / f"{proj_name}.wasm"
 
-            # 복사 및 배포
             try:
-                shutil.copy2(build_file, dest_file)
+                await asyncio.to_thread(shutil.copy2, build_file, dest_file)
                 self.log.info(f"[Builder] Copied artifact -> {dest_file.name}")
             except FileNotFoundError as e:
                 self.log.error(f"[Builder] Deployment Failed for {proj_name}. Artifact not found: {e}")
@@ -171,23 +185,29 @@ class WasmBuilder(BaseTracer):
         return True
 
     async def execute(self) -> None:
-        project_names = [p["name"] for p in WASM_PROJECTS]
+        projects_to_build = [
+            p for p in WASM_PROJECTS 
+            if not self.target_projects or p["name"] in self.target_projects
+        ]
+        project_names = [p["name"] for p in projects_to_build]
+        
         self.log.info(f"\n--- [START] Compiling WASM Artifacts ({', '.join(project_names).upper()}) ---")
         
-        if not await self.generate_schema_from_rust():
-            self.rupture_confirmed = True
-            return
+        if not self.target_projects or "dphi" in self.target_projects:
+            if not await self.generate_schema_from_rust():
+                self.rupture_confirmed = True
+                return
+        else:
+            self.log.info(f"[Builder] Skipping Schema Extraction (Not required for {project_names}).")
             
-        if not await self.build_and_deploy():
+        if not await self.build_and_deploy(projects_to_build):
             self.rupture_confirmed = True
 
 
 if __name__ == "__main__":
-    import asyncio
-    
     async def main():
         builder = WasmBuilder()
-        log.info("Starting WasmBuilder...")
+        log.info("Starting WasmBuilder (Full Mode)...")
         await builder.execute()
         
         if getattr(builder, 'rupture_confirmed', False):
