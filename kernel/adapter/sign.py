@@ -1,5 +1,4 @@
-# xphi.kernel.wasm.adapter.sign
-## @lineage: xphi.kernel.dphi.adapter.sign
+# xphi.kernel.adapter.sign
 import os
 from pathlib import Path
 import hashlib
@@ -9,7 +8,7 @@ import nacl.exceptions
 from cryptography.hazmat.primitives import serialization
 from typing import Dict, Any, Optional
 
-from xphi.kernel.wasm.adapter.state import StateAdapter
+from xphi.kernel.adapter.state import StateAdapter
 from xphi.watcher.plane.emitter import get_emitter
 
 log = get_emitter("adapter.sign")

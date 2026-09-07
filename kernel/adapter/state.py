@@ -1,5 +1,4 @@
-# xphi.kernel.wasm.adapter.state
-## @lineage: xphi.kernel.dphi.adapter.state
+# xphi.kernel.adapter.state
 import canonicaljson
 
 class StateAdapter:

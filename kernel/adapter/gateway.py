@@ -1,5 +1,4 @@
-# xphi.kernel.wasm.adapter.gateway
-## @lineage: xphi.kernel.dphi.adapter.gateway
+# xphi.kernel.adapter.gateway
 import math
 import re
 from typing import Dict, Any, List

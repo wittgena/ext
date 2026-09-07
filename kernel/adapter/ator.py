@@ -1,5 +1,4 @@
-# xphi.kernel.wasm.adapter.ator
-## @lineage: xphi.kernel.dphi.adapter.ator
+# xphi.kernel.adapter.ator
 import math
 from enum import Enum
 from dataclasses import dataclass, field, asdict

@@ -13,8 +13,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import StreamingResponse
 from starlette.types import ASGIApp
 
-from xphi.kernel.wasm.adapter.sign import NodeSigner
-from xphi.kernel.wasm.adapter.state import StateAdapter
+from xphi.kernel.adapter.sign import NodeSigner
+from xphi.kernel.adapter.state import StateAdapter
 from xphi.watcher.plane.emitter import get_emitter
 from xphi.watcher.plane.observer.span import start_active_span, end_active_span
 

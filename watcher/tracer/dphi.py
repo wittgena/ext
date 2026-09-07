@@ -11,7 +11,7 @@ from dataclasses import asdict
 
 from xphi.kernel.space.bind.resolver import resolve_path
 from xphi.state.inter.wasm import WasmInterpreter
-from xphi.kernel.wasm.adapter.sign import LedgerAuthAdapter
+from xphi.kernel.adapter.sign import LedgerAuthAdapter
 from xphi.kernel.wasm.cgroup import CgroupPolicy
 from xphi.state.ledger.consensus import KernelLedger, KernelCommit, LedgerRole
 

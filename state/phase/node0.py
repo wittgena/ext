@@ -14,7 +14,7 @@ from xphi.kernel.space.topos.tunnel.factory import UniversalFacade
 
 from arch.contract.interpreter import NodeInterpreter, AnchoredIR, AnchorFlow
 from xphi.kernel.wasm.broker import DphiMethod
-from xphi.kernel.wasm.adapter.state import StateAdapter
+from xphi.kernel.adapter.state import StateAdapter
 
 from xphi.watcher.plane.emitter import get_emitter
 

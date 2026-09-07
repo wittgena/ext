@@ -1,5 +1,4 @@
 # xphi.state.phase.fsm.defin
-## @lineage: xphi.kernel.dphi.fsm.defin
 import hashlib
 from enum import Enum, auto
 from dataclasses import dataclass
@@ -20,7 +19,7 @@ class FsmStartIntent:
     target_contract: str
 
 @dataclass
-class DtaAnchoredEvent:
+class PtaAnchoredEvent:
     tx_hash: str
 
 @dataclass
@@ -31,7 +30,7 @@ class WasmExecutedEvent:
     error_reason: Optional[str] = None
 
 @dataclass
-class MintGenesisDtaCmd:
+class MintGenesisPtaCmd:
     budget: int
     owner: str
 
@@ -58,7 +57,7 @@ class DefinFSM:
         self.tenant: str = ""
         self.initial_deposit: float = 0.0
         self.authorized_fuel_budget: int = 0
-        self.root_dta_hash: str = ""
+        self.root_pta_hash: str = ""
         self.all_tx_hashes: List[str] = []
 
     def _pure_compute_merkle_root(self, hashes: List[str]) -> str:
@@ -79,10 +78,10 @@ class DefinFSM:
             self.authorized_fuel_budget = int(self.initial_deposit * fuel_ratio)
             
             self.state = FsmState.VIRTUAL_EXCHANGE
-            return MintGenesisDtaCmd(budget=self.authorized_fuel_budget, owner=self.tenant)
+            return MintGenesisPtaCmd(budget=self.authorized_fuel_budget, owner=self.tenant)
 
-        elif self.state == FsmState.VIRTUAL_EXCHANGE and isinstance(event, DtaAnchoredEvent):
-            self.root_dta_hash = event.tx_hash
+        elif self.state == FsmState.VIRTUAL_EXCHANGE and isinstance(event, PtaAnchoredEvent):
+            self.root_pta_hash = event.tx_hash
             self.all_tx_hashes.append(event.tx_hash)
             
             budget_per_agent = self.authorized_fuel_budget // self.concurrent_agents
@@ -90,7 +89,7 @@ class DefinFSM:
             return ExecuteParallelWasmCmd(
                 concurrent_agents=self.concurrent_agents,
                 budget_per_agent=budget_per_agent,
-                root_tx_hash=self.root_dta_hash
+                root_tx_hash=self.root_pta_hash
             )
 
         elif self.state == FsmState.MICRO_BILLING and isinstance(event, WasmExecutedEvent):

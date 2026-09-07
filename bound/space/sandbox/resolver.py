@@ -11,7 +11,7 @@ from xphi.bound.space.contract import Contract, CoherenceState
 from xphi.arch.event.next import next_id, generate_parity_triplet, parse_phase_id
 from xphi.kernel.wasm.broker import DphiBroker, DphiMethod
 from xphi.kernel.wasm.cgroup import CgroupPolicy, Tier
-from xphi.kernel.wasm.adapter.state import StateAdapter
+from xphi.kernel.adapter.state import StateAdapter
 from xphi.bound.space.sandbox.config import fuel_config, tier_config
 from xphi.watcher.plane.emitter import get_emitter
 

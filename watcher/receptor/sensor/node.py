@@ -15,8 +15,8 @@ from xphi.arch.event.psi import PsiCarrier, PsiEvent
 from xphi.arch.contract.interface import IPhaseField, ICriticalDetector, ISystemRegime, IPhaseAtor, IDynamicsKernel
 from xphi.arch.contract.phase.flow import PhaseFlow, Transduction
 
-from xphi.kernel.wasm.adapter.state import StateAdapter
-from xphi.kernel.wasm.adapter.ator import AtorAdapter, NodeState, KernelDelta, NodeRole
+from xphi.kernel.adapter.state import StateAdapter
+from xphi.kernel.adapter.ator import AtorAdapter, NodeState, KernelDelta, NodeRole
 from xphi.kernel.wasm.broker import DphiBroker
 from xphi.kernel.wasm.method import DphiMethod
 from xphi.watcher.plane.emitter import get_emitter

@@ -1,4 +1,4 @@
-# xphi.kernel.wasm.adapter.dta
+# xphi.kernel.adapter.pta
 import json
 import time
 import uuid
@@ -15,7 +15,7 @@ from xphi.state.ledger.oracle import LedgerOracle
 from xphi.kernel.wasm.broker import DphiBroker
 from xphi.watcher.plane.emitter import get_emitter
 
-log = get_emitter("adapter.dta", phase="KERNEL")
+log = get_emitter("adapter.pta", phase="KERNEL")
 
 class AgentWallet:
     """Ed25519 기반의 실제 암호학적 지갑 (서명 및 검증용)"""
@@ -51,7 +51,7 @@ def compute_merkle_root(tx_hashes: List[str]) -> str:
     return current_level[0]
 
 @dataclass
-class DtaPointer:
+class PtaPointer:
     """이전 트랜잭션의 특정 Output을 가리키는 포인터 (OutPoint)"""
     tx_hash: str
     output_index: int
@@ -60,15 +60,15 @@ class DtaPointer:
         return f"{self.tx_hash}:{self.output_index}"
 
 @dataclass
-class DtaInput:
-    """DTA를 소모하기 위한 입력값 (이전 Output의 포인터와 소유자 서명)"""
-    pointer: DtaPointer
+class PtaInput:
+    """PTA를 소모하기 위한 입력값 (이전 Output의 포인터와 소유자 서명)"""
+    pointer: PtaPointer
     signature: str  # 소모 권한 증명 (Ed25519 Signature)
     owner_address: str = "" # 서명 검증을 위한 퍼블릭 키(주소) 힌트
 
 
 @dataclass
-class DtaOutput:
+class PtaOutput:
     """새롭게 생성되는 가치의 단위"""
     amount: int
     owner: str      # 소유권자 (EVM 또는 Cosmos 주소)
@@ -76,10 +76,10 @@ class DtaOutput:
 
 
 @dataclass
-class DtaTransaction:
+class PtaTransaction:
     """입력들을 소모하여 새로운 출력들을 만들어내는 상태 전이의 최소 단위 (Split / Merge 지원)"""
-    inputs: List[DtaInput]
-    outputs: List[DtaOutput]
+    inputs: List[PtaInput]
+    outputs: List[PtaOutput]
     metadata: Dict[str, Any] = field(default_factory=dict)
     timestamp_ms: int = field(default_factory=lambda: int(time.time() * 1000))
     tx_hash: str = field(init=False)
@@ -106,15 +106,15 @@ class DtaTransaction:
             "timestamp_ms": self.timestamp_ms
         }
 
-class DtaAdapter:
-    """DTA 모델 기반의 오프체인 마이크로 빌링 및 상태 병합 어댑터"""
+class PtaAdapter:
+    """PTA 모델 기반의 오프체인 마이크로 빌링 및 상태 병합 어댑터"""
     def __init__(self, broker: DphiBroker):
         self.broker = broker
         self.ledger = KernelLedger()
         self.oracle = LedgerOracle(broker=broker)
         
-        # Hot State)를 유지하는 인메모리 DTA 풀 - Key: DtaPointer.to_key() ("tx_hash:index"), Value: DtaOutput 객체
-        self._unspent_pool: Dict[str, DtaOutput] = {}
+        # Hot State)를 유지하는 인메모리 PTA 풀 - Key: PtaPointer.to_key() ("tx_hash:index"), Value: PtaOutput 객체
+        self._unspent_pool: Dict[str, PtaOutput] = {}
 
     def _verify_ed25519_signature(self, payload: str, signature_b64: str, owner_address: str) -> bool:
         """어댑터 레벨에서 발생하는 실제 연산 로드 (타원곡선 암호학 검증)"""
@@ -134,11 +134,11 @@ class DtaAdapter:
             pub_key.verify(sig_bytes, payload.encode('utf-8'))
             return True
         except Exception as e:
-            log.warning(f"[DtaAdapter] Signature verification failed for payload '{payload}': {e}")
+            log.warning(f"[PtaAdapter] Signature verification failed for payload '{payload}': {e}")
             return False
 
-    async def execute_transaction(self, tx: DtaTransaction) -> str:
-        """DTA 상태 전이를 검증하고 Ledger에 제안 및 밀봉(Seal)"""
+    async def execute_transaction(self, tx: PtaTransaction) -> str:
+        """PTA 상태 전이를 검증하고 Ledger에 제안 및 밀봉(Seal)"""
         ## 모든 Input에 대해 이중 지불 방지를 위한 소유권 검증
         for idx, current_input in enumerate(tx.inputs):
             if current_input.owner_address:
@@ -147,19 +147,19 @@ class DtaAdapter:
                 if not is_valid:
                     raise PermissionError(f"Cryptographic Auth Failed for input index {idx}")
 
-        stream_id = f"dta_tx_{tx.tx_hash[:8]}"
+        stream_id = f"pta_tx_{tx.tx_hash[:8]}"
         stream = LogicStream(
             id=stream_id,
-            action="DTA_STATE_TRANSITION",
+            action="PTA_STATE_TRANSITION",
             payload=tx.to_dict(),
             metadata=tx.metadata
         )
-        log.debug(f"[DtaAdapter] Proposing DTA Tx: {tx.tx_hash[:8]}... (Inputs: {len(tx.inputs)}, Outputs: {len(tx.outputs)})")
+        log.debug(f"[PtaAdapter] Proposing PTA Tx: {tx.tx_hash[:8]}... (Inputs: {len(tx.inputs)}, Outputs: {len(tx.outputs)})")
         sealed_kernel = await self.ledger.propose_and_seal(stream)
         
         if sealed_kernel:
             receipt_signature = sealed_kernel.signature
-            log.info(f"[DtaAdapter] Tx Sealed. Receipt: {receipt_signature[:8]}... | Hash: {tx.tx_hash[:8]}")
+            log.info(f"[PtaAdapter] Tx Sealed. Receipt: {receipt_signature[:8]}... | Hash: {tx.tx_hash[:8]}")
             
             ## 소모된 Input 제거 (Burn)
             for current_input in tx.inputs:
@@ -173,7 +173,7 @@ class DtaAdapter:
                 
             return tx.tx_hash
         else:
-            log.debug(f"[DtaAdapter] Tx Queued in Mempool. Stream: {stream_id}")
+            log.debug(f"[PtaAdapter] Tx Queued in Mempool. Stream: {stream_id}")
             return tx.tx_hash
 
     async def get_balance(self, owner_address: str, asset_type: str = "fuel") -> int:
@@ -186,16 +186,16 @@ class DtaAdapter:
             if output.owner == owner_address and output.asset_type == asset_type:
                 total_balance += output.amount
                 
-        log.debug(f"[DtaAdapter] Balance read for {owner_address[:12]}... -> {total_balance} {asset_type}")
+        log.debug(f"[PtaAdapter] Balance read for {owner_address[:12]}... -> {total_balance} {asset_type}")
         return total_balance
 
     async def verify_and_collapse_receipt(self, tx_hash: str) -> Dict[str, Any]:
         try:
-            log.info(f"[DtaAdapter] Requesting Oracle collapse for DTA Tx: {tx_hash[:8]}...")
+            log.info(f"[PtaAdapter] Requesting Oracle collapse for PTA Tx: {tx_hash[:8]}...")
             collapsed_state = await self.oracle.observe_nexus(tx_hash)
             return collapsed_state
         except Exception as e:
-            log.error(f"[DtaAdapter] Receipt collapse failed: {e}")
+            log.error(f"[PtaAdapter] Receipt collapse failed: {e}")
             raise
 
     async def verify_lineage(self, tx_hash: str, depth: int = 5) -> bool:
@@ -203,10 +203,10 @@ class DtaAdapter:
             res = await self.oracle.verify_kernel_lineage(tx_hash, depth)
             is_valid = res.get("is_valid", False)
             if not is_valid:
-                log.warning(f"[DtaAdapter] DTA Lineage verification failed for {tx_hash[:8]}")
+                log.warning(f"[PtaAdapter] PTA Lineage verification failed for {tx_hash[:8]}")
             return is_valid
         except Exception as e:
-            log.error(f"[DtaAdapter] Lineage verification error: {e}")
+            log.error(f"[PtaAdapter] Lineage verification error: {e}")
             return False
 
     def shutdown(self):
