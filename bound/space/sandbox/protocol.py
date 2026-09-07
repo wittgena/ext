@@ -1,14 +1,12 @@
 # xphi.bound.space.sandbox.protocol
-## @lineage: xphi.xor.space.sandbox.protocol
-## @lineage: xphi.arch.eco.protocol
 from enum import Enum
 from dataclasses import dataclass
 from typing import List, Optional
 
-from xphi.kernel.wasm.adapter.utxo import UtxoTransaction, UtxoPointer
+from xphi.kernel.wasm.adapter.dta import DtaTransaction, DtaPointer
 from xphi.state.ledger.consensus import SealedKernel, ToposBlob, KernelLedger
 from xphi.state.ledger.oracle import LedgerOracle
-from xphi.kernel.wasm.adapter.utxo import UtxoAdapter
+from xphi.kernel.wasm.adapter.dta import DtaAdapter
 
 class TriadAxis(str, Enum):
     INTENT = "Intent"
@@ -19,18 +17,18 @@ class TriadAxis(str, Enum):
 class MsgIngressPledge:
     axis: TriadAxis
     actor_address: str
-    pledge_tx: UtxoTransaction  # The actual L1 transaction minting the initial fuel
+    pledge_tx: DtaTransaction  # The actual L1 transaction minting the initial fuel
 
 @dataclass
 class MsgDelegateTrust:
     delegator_address: str
-    split_tx: UtxoTransaction   # Consumes parent UTXO, outputs multiple child UTXOs
+    split_tx: DtaTransaction   # Consumes parent DTA, outputs multiple child DTAs
 
 @dataclass
 class MsgWasmExecution:
     worker_address: str
     target_wasm: str
-    execution_tx: UtxoTransaction    # Consumes worker's fuel, outputs to 0xDEAD
+    execution_tx: DtaTransaction    # Consumes worker's fuel, outputs to 0xDEAD
 
 @dataclass
 class MsgExecutionReceipt:
@@ -46,21 +44,21 @@ class MsgSettlementSeal:
     l1_calldata: str            # Final formatted payload for target EVM/L1
 
 class ProtocolValidator:
-    def __init__(self, utxo_adapter: UtxoAdapter, ledger: KernelLedger, oracle: LedgerOracle):
-        self.utxo = utxo_adapter
+    def __init__(self, dta_adapter: DtaAdapter, ledger: KernelLedger, oracle: LedgerOracle):
+        self.dta = dta_adapter
         self.ledger = ledger
         self.oracle = oracle
 
     async def apply_ingress(self, msg: MsgIngressPledge) -> str:
-        tx_hash = await self.utxo.execute_transaction(msg.pledge_tx)
+        tx_hash = await self.dta.execute_transaction(msg.pledge_tx)
         return tx_hash
 
     async def apply_delegation(self, msg: MsgDelegateTrust) -> str:
-        tx_hash = await self.utxo.execute_transaction(msg.split_tx)
+        tx_hash = await self.dta.execute_transaction(msg.split_tx)
         return tx_hash
 
     async def apply_wasm_execution(self, msg: MsgWasmExecution) -> str:
-        tx_hash = await self.utxo.execute_transaction(msg.execution_tx)
+        tx_hash = await self.dta.execute_transaction(msg.execution_tx)
         return tx_hash
 
     async def verify_execution_receipt(self, receipt: MsgExecutionReceipt) -> bool:

@@ -1,5 +1,4 @@
-# xphi.kernel.wasm.adapter.utxo
-## @lineage: xphi.kernel.dphi.adapter.utxo
+# xphi.kernel.wasm.adapter.dta
 import json
 import time
 import uuid
@@ -16,7 +15,7 @@ from xphi.state.ledger.oracle import LedgerOracle
 from xphi.kernel.wasm.broker import DphiBroker
 from xphi.watcher.plane.emitter import get_emitter
 
-log = get_emitter("adapter.utxo", phase="KERNEL")
+log = get_emitter("adapter.dta", phase="KERNEL")
 
 class AgentWallet:
     """Ed25519 기반의 실제 암호학적 지갑 (서명 및 검증용)"""
@@ -36,10 +35,6 @@ class AgentWallet:
 
 
 def compute_merkle_root(tx_hashes: List[str]) -> str:
-    """
-    @desc: 수십 개의 영수증(Tx Hash)을 이진 트리로 해싱하여 최종 Root를 뽑는 연산
-    - Phase 4 Netting 시 L1 제출을 위한 실제 Rollup 압축 로드를 발생
-    """
     if not tx_hashes:
         return ""
     
@@ -55,9 +50,8 @@ def compute_merkle_root(tx_hashes: List[str]) -> str:
         
     return current_level[0]
 
-"""UTXO Core Data Models"""
 @dataclass
-class UtxoPointer:
+class DtaPointer:
     """이전 트랜잭션의 특정 Output을 가리키는 포인터 (OutPoint)"""
     tx_hash: str
     output_index: int
@@ -66,26 +60,26 @@ class UtxoPointer:
         return f"{self.tx_hash}:{self.output_index}"
 
 @dataclass
-class UtxoInput:
-    """UTXO를 소모하기 위한 입력값 (이전 Output의 포인터와 소유자 서명)"""
-    pointer: UtxoPointer
+class DtaInput:
+    """DTA를 소모하기 위한 입력값 (이전 Output의 포인터와 소유자 서명)"""
+    pointer: DtaPointer
     signature: str  # 소모 권한 증명 (Ed25519 Signature)
     owner_address: str = "" # 서명 검증을 위한 퍼블릭 키(주소) 힌트
 
 
 @dataclass
-class UtxoOutput:
-    """새롭게 생성되는 가치의 단위 (미지출 상태일 때 UTXO가 됨)"""
+class DtaOutput:
+    """새롭게 생성되는 가치의 단위"""
     amount: int
     owner: str      # 소유권자 (EVM 또는 Cosmos 주소)
     asset_type: str = "fuel"
 
 
 @dataclass
-class UtxoTransaction:
+class DtaTransaction:
     """입력들을 소모하여 새로운 출력들을 만들어내는 상태 전이의 최소 단위 (Split / Merge 지원)"""
-    inputs: List[UtxoInput]
-    outputs: List[UtxoOutput]
+    inputs: List[DtaInput]
+    outputs: List[DtaOutput]
     metadata: Dict[str, Any] = field(default_factory=dict)
     timestamp_ms: int = field(default_factory=lambda: int(time.time() * 1000))
     tx_hash: str = field(init=False)
@@ -112,15 +106,15 @@ class UtxoTransaction:
             "timestamp_ms": self.timestamp_ms
         }
 
-class UtxoAdapter:
-    """UTXO 모델 기반의 오프체인 마이크로 빌링 및 상태 병합 어댑터"""
+class DtaAdapter:
+    """DTA 모델 기반의 오프체인 마이크로 빌링 및 상태 병합 어댑터"""
     def __init__(self, broker: DphiBroker):
         self.broker = broker
         self.ledger = KernelLedger()
         self.oracle = LedgerOracle(broker=broker)
         
-        # Hot State)를 유지하는 인메모리 UTXO 풀 - Key: UtxoPointer.to_key() ("tx_hash:index"), Value: UtxoOutput 객체
-        self._unspent_pool: Dict[str, UtxoOutput] = {}
+        # Hot State)를 유지하는 인메모리 DTA 풀 - Key: DtaPointer.to_key() ("tx_hash:index"), Value: DtaOutput 객체
+        self._unspent_pool: Dict[str, DtaOutput] = {}
 
     def _verify_ed25519_signature(self, payload: str, signature_b64: str, owner_address: str) -> bool:
         """어댑터 레벨에서 발생하는 실제 연산 로드 (타원곡선 암호학 검증)"""
@@ -140,11 +134,11 @@ class UtxoAdapter:
             pub_key.verify(sig_bytes, payload.encode('utf-8'))
             return True
         except Exception as e:
-            log.warning(f"[UtxoAdapter] Signature verification failed for payload '{payload}': {e}")
+            log.warning(f"[DtaAdapter] Signature verification failed for payload '{payload}': {e}")
             return False
 
-    async def execute_transaction(self, tx: UtxoTransaction) -> str:
-        """UTXO 상태 전이(Tx)를 검증하고 Ledger에 제안 및 밀봉(Seal)"""
+    async def execute_transaction(self, tx: DtaTransaction) -> str:
+        """DTA 상태 전이를 검증하고 Ledger에 제안 및 밀봉(Seal)"""
         ## 모든 Input에 대해 이중 지불 방지를 위한 소유권 검증
         for idx, current_input in enumerate(tx.inputs):
             if current_input.owner_address:
@@ -153,21 +147,20 @@ class UtxoAdapter:
                 if not is_valid:
                     raise PermissionError(f"Cryptographic Auth Failed for input index {idx}")
 
-        stream_id = f"utxo_tx_{tx.tx_hash[:8]}"
+        stream_id = f"dta_tx_{tx.tx_hash[:8]}"
         stream = LogicStream(
             id=stream_id,
-            action="UTXO_STATE_TRANSITION",
+            action="DTA_STATE_TRANSITION",
             payload=tx.to_dict(),
             metadata=tx.metadata
         )
-        log.debug(f"[UtxoAdapter] Proposing UTXO Tx: {tx.tx_hash[:8]}... (Inputs: {len(tx.inputs)}, Outputs: {len(tx.outputs)})")
+        log.debug(f"[DtaAdapter] Proposing DTA Tx: {tx.tx_hash[:8]}... (Inputs: {len(tx.inputs)}, Outputs: {len(tx.outputs)})")
         sealed_kernel = await self.ledger.propose_and_seal(stream)
         
         if sealed_kernel:
             receipt_signature = sealed_kernel.signature
-            log.info(f"[UtxoAdapter] Tx Sealed. Receipt: {receipt_signature[:8]}... | Hash: {tx.tx_hash[:8]}")
+            log.info(f"[DtaAdapter] Tx Sealed. Receipt: {receipt_signature[:8]}... | Hash: {tx.tx_hash[:8]}")
             
-            ## 인메모리 UTXO 상태 동기화 (State Sync) - 트랜잭션이 원장에 무결하게 기록되었으므로, 메모리 풀을 업데이트하여 다음 초고빈도 연산을 준비
             ## 소모된 Input 제거 (Burn)
             for current_input in tx.inputs:
                 pointer_key = current_input.pointer.to_key()
@@ -180,7 +173,7 @@ class UtxoAdapter:
                 
             return tx.tx_hash
         else:
-            log.debug(f"[UtxoAdapter] Tx Queued in Mempool. Stream: {stream_id}")
+            log.debug(f"[DtaAdapter] Tx Queued in Mempool. Stream: {stream_id}")
             return tx.tx_hash
 
     async def get_balance(self, owner_address: str, asset_type: str = "fuel") -> int:
@@ -193,16 +186,16 @@ class UtxoAdapter:
             if output.owner == owner_address and output.asset_type == asset_type:
                 total_balance += output.amount
                 
-        log.debug(f"[UtxoAdapter] Balance read for {owner_address[:12]}... -> {total_balance} {asset_type}")
+        log.debug(f"[DtaAdapter] Balance read for {owner_address[:12]}... -> {total_balance} {asset_type}")
         return total_balance
 
     async def verify_and_collapse_receipt(self, tx_hash: str) -> Dict[str, Any]:
         try:
-            log.info(f"[UtxoAdapter] Requesting Oracle collapse for UTXO Tx: {tx_hash[:8]}...")
+            log.info(f"[DtaAdapter] Requesting Oracle collapse for DTA Tx: {tx_hash[:8]}...")
             collapsed_state = await self.oracle.observe_nexus(tx_hash)
             return collapsed_state
         except Exception as e:
-            log.error(f"[UtxoAdapter] Receipt collapse failed: {e}")
+            log.error(f"[DtaAdapter] Receipt collapse failed: {e}")
             raise
 
     async def verify_lineage(self, tx_hash: str, depth: int = 5) -> bool:
@@ -210,10 +203,10 @@ class UtxoAdapter:
             res = await self.oracle.verify_kernel_lineage(tx_hash, depth)
             is_valid = res.get("is_valid", False)
             if not is_valid:
-                log.warning(f"[UtxoAdapter] UTXO Lineage verification failed for {tx_hash[:8]}")
+                log.warning(f"[DtaAdapter] DTA Lineage verification failed for {tx_hash[:8]}")
             return is_valid
         except Exception as e:
-            log.error(f"[UtxoAdapter] Lineage verification error: {e}")
+            log.error(f"[DtaAdapter] Lineage verification error: {e}")
             return False
 
     def shutdown(self):
