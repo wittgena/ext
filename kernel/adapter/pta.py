@@ -5,7 +5,7 @@ import uuid
 import hashlib
 import base64
 from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
@@ -50,6 +50,7 @@ def compute_merkle_root(tx_hashes: List[str]) -> str:
         
     return current_level[0]
 
+
 @dataclass
 class PtaPointer:
     """이전 트랜잭션의 특정 Output을 가리키는 포인터 (OutPoint)"""
@@ -58,6 +59,7 @@ class PtaPointer:
 
     def to_key(self) -> str:
         return f"{self.tx_hash}:{self.output_index}"
+
 
 @dataclass
 class PtaInput:
@@ -69,17 +71,29 @@ class PtaInput:
 
 @dataclass
 class PtaOutput:
-    """새롭게 생성되는 가치의 단위"""
+    """새롭게 생성되는 가치의 단위 (기존 UTXO 구조 - 수정 없음)"""
     amount: int
     owner: str      # 소유권자 (EVM 또는 Cosmos 주소)
     asset_type: str = "fuel"
 
 
 @dataclass
+class PhaseAnchorOutput(PtaOutput):
+    handle_id: str = ""
+    phase_status: str = ""    # PENDING, YIELD, RESOLVED 등
+    executable_payload: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        self.amount = 0
+        self.owner = f"mcp_bridge_{self.handle_id}" 
+        self.asset_type = "mcp_state_anchor"
+
+
+@dataclass
 class PtaTransaction:
     """입력들을 소모하여 새로운 출력들을 만들어내는 상태 전이의 최소 단위 (Split / Merge 지원)"""
     inputs: List[PtaInput]
-    outputs: List[PtaOutput]
+    outputs: List[PtaOutput]  # 다형성에 의해 PtaOutput과 PhaseAnchorOutput 모두 수용
     metadata: Dict[str, Any] = field(default_factory=dict)
     timestamp_ms: int = field(default_factory=lambda: int(time.time() * 1000))
     tx_hash: str = field(init=False)
@@ -90,7 +104,9 @@ class PtaTransaction:
     def _compute_hash(self) -> str:
         payload = {
             "inputs": [{"tx": i.pointer.tx_hash, "idx": i.pointer.output_index} for i in self.inputs],
-            "outputs": [{"amount": o.amount, "owner": o.owner, "asset": o.asset_type} for o in self.outputs],
+            # [IMPROVED] 하드코딩된 매핑 대신 dataclasses.asdict를 사용하여 
+            # PhaseAnchorOutput의 추가 필드(handle_id, phase_status 등)까지 동적 해싱 지원
+            "outputs": [asdict(o) for o in self.outputs],
             "meta": self.metadata,
             "ts": self.timestamp_ms
         }
@@ -101,10 +117,12 @@ class PtaTransaction:
         return {
             "tx_hash": self.tx_hash,
             "inputs": [{"pointer": i.pointer.to_key(), "signature": i.signature, "owner": i.owner_address} for i in self.inputs],
-            "outputs": [{"amount": o.amount, "owner": o.owner, "asset_type": o.asset_type} for o in self.outputs],
+            # [IMPROVED] 상속된 자식 객체들의 필드도 완벽하게 직렬화
+            "outputs": [asdict(o) for o in self.outputs],
             "metadata": self.metadata,
             "timestamp_ms": self.timestamp_ms
         }
+
 
 class PtaAdapter:
     """PTA 모델 기반의 오프체인 마이크로 빌링 및 상태 병합 어댑터"""
@@ -113,7 +131,7 @@ class PtaAdapter:
         self.ledger = KernelLedger()
         self.oracle = LedgerOracle(broker=broker)
         
-        # Hot State)를 유지하는 인메모리 PTA 풀 - Key: PtaPointer.to_key() ("tx_hash:index"), Value: PtaOutput 객체
+        # Hot State를 유지하는 인메모리 PTA 풀 - Key: PtaPointer.to_key() ("tx_hash:index"), Value: PtaOutput 객체
         self._unspent_pool: Dict[str, PtaOutput] = {}
 
     def _verify_ed25519_signature(self, payload: str, signature_b64: str, owner_address: str) -> bool:
@@ -183,6 +201,7 @@ class PtaAdapter:
         """
         total_balance = 0
         for output in self._unspent_pool.values():
+            # PhaseAnchorOutput은 asset_type="mcp_state_anchor" 이므로 여기서 무시됨 (안전함)
             if output.owner == owner_address and output.asset_type == asset_type:
                 total_balance += output.amount
                 

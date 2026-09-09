@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xphi"
-version = "1.0.1"
+version = "1.1.2"
 description = "The Universal Integration Boundary for heterogeneous AI ecosystems"
 readme = "README.md"
 requires-python = ">=3.10"

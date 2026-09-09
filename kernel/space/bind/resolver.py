@@ -1,5 +1,4 @@
 # xphi.kernel.space.bind.resolver
-## @lineage: kernel.space.bind.resolver
 import os
 import json
 import re
@@ -34,9 +33,16 @@ def find_current_self(start: Path | None = None) -> Path:
         start = Path.cwd()
 
     start = start.resolve()
+    
+    # 1. DEV 모드 탐색 (상위로 올라가며 anchor 찾기)
     for parent in [start] + list(start.parents):
         if (parent / "anchor").is_dir() or (parent / ".anchor").is_dir():
             return parent
+
+    # 2. USER 모드 판별: site-packages 내에서 실행 중이라면
+    # 파편화를 막기 위해 무조건 홈 디렉터리를 기준점(self)으로 반환
+    if any(part in ["site-packages", "dist-packages"] for part in Path(__file__).parts):
+        return Path.home()
 
     return start
 
@@ -136,6 +142,9 @@ def resolve_path(name: str, start: Path | None = None) -> Path:
     bound = load_bound(self_root)
     paths = bound.get("paths", {})
     
+    # around 토폴로지(site-packages 절대 경로 맵) 로드
+    around_topology = bound.get("around", {})
+    
     if name in paths:
         raw_mapped = paths[name]
         substitutions = {"self": self_root, "anchor": anchor_dir}
@@ -143,7 +152,25 @@ def resolve_path(name: str, start: Path | None = None) -> Path:
         ## @merge: Substitution syntax resolution
         for prefix_key, rel_path in bound.get("substitution", {}).items():
             safe_rel_path = rel_path.lstrip("/") if isinstance(rel_path, str) else str(rel_path)
-            substitutions[prefix_key] = (self_root / safe_rel_path).resolve()
+            base_module = safe_rel_path.split("/")[0] # 예: "xphi", "anchor"
+            
+            # 1. USER 모드 코어 패키지 (fiber, xphi 등 - site-packages 절대 경로 매핑)
+            if base_module in around_topology:
+                base_abs_path = Path(around_topology[base_module]["path"])
+                sub_path_parts = safe_rel_path.split("/")[1:]
+                sub_path = "/".join(sub_path_parts) if sub_path_parts else ""
+                substitutions[prefix_key] = (base_abs_path / sub_path).resolve()
+            
+            # 2. 앵커 데이터 경로 (USER 모드의 .anchor 이름 변경 규칙 적용)
+            elif base_module == "anchor":
+                sub_path_parts = safe_rel_path.split("/")[1:]
+                sub_path = "/".join(sub_path_parts) if sub_path_parts else ""
+                # self_root / "anchor" 가 아닌 계산된 anchor_dir 사용
+                substitutions[prefix_key] = (anchor_dir / sub_path).resolve()
+                
+            # 3. 기타 런타임 데이터 및 DEV 모드 (self_root 기준 상대 매핑)
+            else:
+                substitutions[prefix_key] = (self_root / safe_rel_path).resolve()
         
         ## @match: Pattern :prefix:/sub_path
         match = re.match(r"^:([^:]+):(?:/(.*))?$", raw_mapped)
@@ -161,7 +188,10 @@ def resolve_path(name: str, start: Path | None = None) -> Path:
         ## @fallback: Isolate unbound paths into anchor namespace
         target_path = (anchor_dir / clean_name).resolve()
 
-    target_path.mkdir(parents=True, exist_ok=True)
+    # 안전장치: site-packages(소스 코드) 내부 경로를 반환할 때는 mkdir을 강제로 실행하지 않음
+    if not any(part in ["site-packages", "dist-packages"] for part in target_path.parts):
+        target_path.mkdir(parents=True, exist_ok=True)
+        
     _track_io_usage(name, target_path)
     return target_path
 
