@@ -13,7 +13,7 @@ try:
 except ImportError:
     wasmtime = None
 
-from arch.contract.interpreter import ExecutionError, ExecutionResult
+from xphi.arch.contract.interpreter import ExecutionError, ExecutionResult
 from xphi.kernel.space.bind.resolver import resolve_path
 from xphi.kernel.wasm.cgroup import WasmCgroup, CgroupPolicy, Tier
 from xphi.state.inter.wasm import WasmInterpreter

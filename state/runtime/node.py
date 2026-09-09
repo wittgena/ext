@@ -8,7 +8,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 
-from arch.contract.interpreter import NodeInterpreter, AnchorFlow
+from xphi.arch.contract.interpreter import NodeInterpreter, AnchorFlow
 from xphi.kernel.space.topos.tunnel.factory import UniversalFacade, TunnelFactory
 from xphi.arch.event.psi import PsiEvent, PsiCarrier
 from xphi.arch.event.bus import TunnelEventBus

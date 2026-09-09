@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 from contextlib import suppress
 
-from arch.contract.interpreter import PRIMITIVE_TYPES, ExecutionError, ProtocolError, ExecutionResult, JsonRpcMessage, JsonRpcErrorCode
+from xphi.arch.contract.interpreter import PRIMITIVE_TYPES, ExecutionError, ProtocolError, ExecutionResult, JsonRpcMessage, JsonRpcErrorCode
 from xphi.kernel.space.bind.resolver import find_current_self, resolve_path
 from xphi.watcher.plane.emitter import get_emitter
 from xphi.kernel.wasm.cgroup import CgroupPolicy, Tier

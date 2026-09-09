@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from xphi.arch.event.psi import PsiCarrier
 from xphi.kernel.space.topos.tunnel.factory import UniversalFacade
 
-from arch.contract.interpreter import NodeInterpreter, AnchoredIR, AnchorFlow
+from xphi.arch.contract.interpreter import NodeInterpreter, AnchoredIR, AnchorFlow
 from xphi.kernel.wasm.broker import DphiMethod
 from xphi.kernel.adapter.state import StateAdapter
 
