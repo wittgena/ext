@@ -4,13 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "xphi"
-version = "1.1.2"
 description = "The Universal Integration Boundary for heterogeneous AI ecosystems"
 readme = "README.md"
 requires-python = ">=3.10"
 
 dependencies = [
-    "uvloop", "redis", "networkx", "pyyaml", "watchdog", "rocksdict", "libcst", "pydantic", "fastapi", "httpx", "eclipse-zenoh", "mcp"
+    "uvloop", "redis", "pyyaml", "watchdog", "rocksdict", "libcst", "pydantic", "fastapi", "httpx", "eclipse-zenoh", "mcp"
 ]
 
 [project.scripts]
