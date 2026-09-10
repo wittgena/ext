@@ -1,8 +1,6 @@
 # xphi.bound.oracle.binance.kline
-## @lineage: fiber.infra.oracle.proof.binance.kline
-## @lineage: fiber.dphi.adapter.proof.binance.kline
 """
-@arn: arn:bound:oracle:binance:kline:v1.0.0
+@arn: arn:bound:oracle:binance:kline:v1.0.1
 @desc: Deterministic data adapter and validator for Binance K-line data
 """
 from typing import Dict, Any, List, TypedDict
