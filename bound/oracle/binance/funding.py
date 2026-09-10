@@ -1,8 +1,6 @@
 # xphi.bound.oracle.binance.funding
-## @lineage: fiber.infra.oracle.proof.binance.funding
-## @lineage: fiber.dphi.adapter.proof.binance.funding
 """
-@arn: arn:bound:oracle:binance:funding:v1.0.0
+@arn: arn:bound:oracle:binance:funding:v1.0.1
 @desc: Deterministic adapter and validator for Binance USD(S)-M Futures Funding Rates
 """
 from typing import Dict, Any, List, TypedDict
