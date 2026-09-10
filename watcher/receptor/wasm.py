@@ -6,9 +6,9 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 
-from xphi.kernel.adapter.sign import NodeSigner
+from xphi.bound.adapter.sign import NodeSigner
 from xphi.kernel.wasm.broker import DphiBroker
-from xphi.kernel.adapter.state import StateAdapter
+from xphi.bound.adapter.state import StateAdapter
 from xphi.watcher.plane.emitter import get_emitter
 
 log = get_emitter("receptor.wasm")

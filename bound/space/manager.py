@@ -16,8 +16,8 @@ from docker.errors import NotFound, BuildError
 from docker.models.containers import Container
 from pydantic import Field, ConfigDict, BeforeValidator
 
-from xphi.bound.bridge.terminal import CommandResult, FileOperationResult
-from xphi.bound.bridge.git.schema import GitChange, GitDiff
+from xphi.bound.space.terminal import CommandResult, FileOperationResult
+from xphi.bound.space.git.schema import GitChange, GitDiff
 from xphi.arch.model.surge.disc import DiscMixin
 from xphi.arch.model.surge.model import DynamicSurgeModel
 from xphi.kernel.space.bind.resolver import resolve_path

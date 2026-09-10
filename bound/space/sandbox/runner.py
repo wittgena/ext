@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives import serialization
 from xphi.bound.space.contract import Contract, CoherenceState
 from xphi.bound.space.sandbox.resolver import SandboxExecutor, TaskContext, EffectResolver
 from xphi.kernel.wasm.broker import DphiBroker
-from xphi.kernel.adapter.state import StateAdapter
+from xphi.bound.adapter.state import StateAdapter
 from xphi.state.ledger.consensus import KernelLedger, KernelCommit
 from xphi.kernel.wasm.method import DphiMethod
 from xphi.watcher.plane.emitter import get_emitter

@@ -3,7 +3,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import List, Optional
 
-from xphi.kernel.adapter.pta import PtaTransaction, PtaPointer, PtaAdapter
+from xphi.bound.adapter.pta import PtaTransaction, PtaPointer, PtaAdapter
 from xphi.state.ledger.consensus import SealedKernel, ToposBlob, KernelLedger
 from xphi.state.ledger.oracle import LedgerOracle
 
