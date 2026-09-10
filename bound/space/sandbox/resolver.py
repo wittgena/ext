@@ -1,5 +1,4 @@
 # xphi.bound.space.sandbox.resolver
-## @lineage: xphi.xor.space.sandbox.resolver
 import os
 import json
 import time
@@ -355,7 +354,7 @@ class BenchProfile:
         
         flat_payload = {"schema": schema, "entry": entry, "depth": depth}
         context = TaskContext(
-            task_type="execute_agent_schema",
+            task_type="execute_sandbox_schema",
             tier=tier.value, 
             sandbox_env=SandboxEnv.DENO,
             payload=flat_payload
