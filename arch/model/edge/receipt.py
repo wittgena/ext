@@ -63,7 +63,7 @@ class AuditLogResponse(BaseModel):
     result: AuditResult
 
 class BilledExecutionRequest(BaseModel):
-    agent_schema: Dict[str, Any]
+    sandbox_schema: Dict[str, Any]
     context_depth: int = 2
     target_entry: str
 

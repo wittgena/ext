@@ -1,0 +1,22 @@
+{
+    "location": "xphi.kernel.space.origin.config",
+    "network": "xphi.origin",
+    "attestation": {
+        "root_pubkey": "0e184733f354a12fa283df73e08f864eb77639a65970f08dceed9c15e44fee25",
+        "pre_signed_root_sig": "62508642d0d26ea25795b91b0403a17899a157268803b6bf31af9743d6e8cd179c6de31ddd0365e46bb6a385c0ba6fdb8f3be9b37c0790c7335b647e9473d307"
+    },
+    "validators": [
+        {
+            "node_id": "validator_1",
+            "pubkey": "186b89cf6579b5e87c66b1e5a84ad272d9b6d4736dad08243cb1377902362abf"
+        },
+        {
+            "node_id": "validator_2",
+            "pubkey": "4849f0147dee2950cba2b2f41dd300a8c3c3d7ef7c58311cbb864ed2ff61c7b4"
+        },
+        {
+            "node_id": "validator_3",
+            "pubkey": "55ca65127781ed002e580142aef082ca19a52eaa9299f4ccc56a26a6c9de79c4"
+        }
+    ]
+}
