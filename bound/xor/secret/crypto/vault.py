@@ -1,6 +1,4 @@
 # xphi.bound.xor.secret.crypto.vault
-## @lineage: xphi.bound.secret.crypto.vault
-## @lineage: xphi.xor.secret.crypto.vault
 import os
 import json
 import hashlib

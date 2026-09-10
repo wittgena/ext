@@ -1,5 +1,4 @@
 # xphi.watcher.receptor.audit.secret
-## @lineage: fiber.phase.plane.receptor.audit.secret
 import os
 import asyncio
 import hashlib
@@ -29,8 +28,8 @@ class SecretAuditor:
         sanitized_event = await asyncio.to_thread(self._encrypt_sensitive_data, event)
         event_hash = await asyncio.to_thread(self._generate_deterministic_hash, sanitized_event)
         is_authorized = await self.gateway.authorize(
-            action_id=f"pangea_audit_{event_hash[:8]}",
-            action="PANGEA_AUDIT_LOG_APPEND",
+            action_id=f"audit_{event_hash[:8]}",
+            action="AUDIT_LOG_APPEND",
             payload=sanitized_event,
             metadata={"needs_proof": needs_proof}
         )
@@ -82,6 +81,6 @@ class SecretAuditor:
 
 
 async def get_secret_auditor() -> SecretAuditor:
-    secret_key = os.getenv("BRANE_LEDGER_CIPHER_KEY", "mock-secret-key-for-dev-only")
+    secret_key = os.getenv("LEDGER_CIPHER_KEY", "mock-secret-key-for-dev-only")
     cipher_instance = Cipher(secret_key=secret_key)
     return SecretAuditor(cipher=cipher_instance)

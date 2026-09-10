@@ -1,9 +1,4 @@
 # xphi.bound.xor.secret.client
-## @lineage: xphi.bound.secret.client
-## @lineage: xphi.xor.secret.client
-## @lineage: xphi.arch.xor.secret.client
-## @lineage: arch.xor.secret.client
-## @lineage: mesh.bound.secure.secret.client
 import base64
 import os
 import binascii
