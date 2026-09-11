@@ -1,9 +1,10 @@
-# xphi.state.phase.network.bridge
+# xphi.state.network.bridge
+## @lineage: xphi.state.phase.network.bridge
 ## @lineage: xphi.kernel.phase.network.bridge
 import uuid
 import asyncio
 from typing import Any
-from xphi.state.phase.network.channel.pipeline import DuplexChannel, ChannelContext
+from xphi.state.network.channel.pipeline import DuplexChannel, ChannelContext
 from xphi.watcher.plane.emitter import flow_scope, get_emitter
 
 log = get_emitter("rpc.bridge")

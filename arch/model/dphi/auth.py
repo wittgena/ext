@@ -1,7 +1,4 @@
-# xphi.kernel.wasm.llm.auth
-## @lineage: xphi.kernel.dphi.llm.auth
-## @lineage: xphi.kernel.dphi.schema
-## @lineage: kernel.dphi.schema
+# xphi.arch.model.dphi.auth
 from enum import Enum
 from pydantic import BaseModel, Field
 from typing import Optional

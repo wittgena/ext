@@ -1,9 +1,10 @@
-# xphi.state.phase.network.factory
+# xphi.state.network.factory
+## @lineage: xphi.state.phase.network.factory
 ## @lineage: xphi.kernel.phase.network.factory
 import asyncio
 import logging
 from typing import Callable, List, Optional
-from xphi.state.phase.network.channel.pipeline import ChannelPipeline, ChannelContext, DuplexChannel
+from xphi.state.network.channel.pipeline import ChannelPipeline, ChannelContext, DuplexChannel
 
 log = logging.getLogger("protocol.factory")
 

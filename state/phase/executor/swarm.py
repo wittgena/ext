@@ -1,4 +1,5 @@
-# xphi.state.runtime.executor.swarm
+# xphi.state.phase.executor.swarm
+## @lineage: xphi.state.runtime.executor.swarm
 ## @lineage: xphi.kernel.phase.runtime.executor.swarm
 import os
 import sys
@@ -13,9 +14,9 @@ from xphi.arch.event.next import next_id, LogEvent
 from dataclasses import asdict
 from xphi.watcher.plane.emitter import get_logger, flow_scope
 from xphi.arch.contract.registry.unified import registry
-from xphi.state.runtime.executor.base import BaseExecutor
-from xphi.state.runtime.executor.cli import _GenericCliExecutor
-from xphi.state.runtime.flow.executor import FlowExecutor
+from xphi.state.phase.executor.base import BaseExecutor
+from xphi.state.phase.executor.cli import _GenericCliExecutor
+from xphi.state.phase.flow.executor import FlowExecutor
 
 log = get_logger("swarm.executor")
 

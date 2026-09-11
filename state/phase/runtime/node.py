@@ -1,4 +1,5 @@
-# xphi.state.runtime.node
+# xphi.state.phase.runtime.node
+## @lineage: xphi.state.runtime.node
 ## @lineage: xphi.kernel.phase.runtime.node
 import asyncio
 import time
@@ -17,9 +18,9 @@ from xphi.arch.contract.interface import IPhaseAtor, IPhaseField, IEventBus
 from xphi.arch.contract.registry.unified import registry
 
 from xphi.kernel.space.bind.resolver import find_current_self
-from xphi.state.runtime.executor.swarm import SwarmExecutor
-from xphi.state.runtime.sensor import SurfaceSensor, SurfaceActuator
-from xphi.state.runtime.context import RuntimeContext
+from xphi.state.phase.executor.swarm import SwarmExecutor
+from xphi.state.phase.runtime.sensor import SurfaceSensor, SurfaceActuator
+from xphi.state.phase.runtime.context import RuntimeContext
 from xphi.kernel.ops.task.supervisor import TaskSupervisor, Dispatcher
 from xphi.kernel.ops.daemon.bootstrap import mount_master_layer, EventBusDaemon
 from xphi.kernel.wasm.broker import DphiBroker
@@ -27,7 +28,7 @@ from xphi.kernel.wasm.broker import DphiBroker
 from xphi.watcher.plane.sink import TunnelSink
 from xphi.watcher.plane.emitter import get_emitter
 
-from xphi.state.runtime.worker import worker_process_entry
+from xphi.state.phase.runtime.worker import worker_process_entry
 
 RUNTIME_KEY = {
     "node": "runtime:node:{node_id}",

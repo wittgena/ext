@@ -1,4 +1,5 @@
-# xphi.state.runtime.gateway
+# xphi.state.phase.runtime.gateway
+## @lineage: xphi.state.runtime.gateway
 ## @lineage: xphi.kernel.phase.runtime.gateway
 ## @lineage: kernel.phase.runtime.gateway
 ## @lineage: kernel.phase.boot

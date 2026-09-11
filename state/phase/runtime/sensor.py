@@ -1,4 +1,5 @@
-# xphi.state.runtime.sensor
+# xphi.state.phase.runtime.sensor
+## @lineage: xphi.state.runtime.sensor
 ## @lineage: xphi.kernel.phase.runtime.sensor
 ## @lineage: kernel.phase.runtime.sensor
 ## @lineage: phase.runtime.sensor
