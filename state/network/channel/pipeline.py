@@ -1,4 +1,5 @@
-# xphi.state.phase.network.channel.pipeline
+# xphi.state.network.channel.pipeline
+## @lineage: xphi.state.phase.network.channel.pipeline
 ## @lineage: xphi.kernel.phase.network.channel.pipeline
 import asyncio
 import logging

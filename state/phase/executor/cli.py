@@ -1,4 +1,5 @@
-# xphi.state.runtime.executor.cli
+# xphi.state.phase.executor.cli
+## @lineage: xphi.state.runtime.executor.cli
 ## @lineage: xphi.kernel.phase.runtime.executor.cli
 ## @lineage: kernel.phase.runtime.executor.cli
 import os
@@ -15,7 +16,7 @@ from pathlib import Path
 from xphi.arch.event.psi import PsiEvent, PsiCarrier
 from xphi.arch.event.next import next_id, LogEvent
 from xphi.arch.contract.registry.unified import registry
-from xphi.state.runtime.executor.base import BaseExecutor
+from xphi.state.phase.executor.base import BaseExecutor
 
 from xphi.kernel.space.topos.tunnel.factory import TunnelFactory
 from xphi.kernel.space.bind.resolver import get_invoker

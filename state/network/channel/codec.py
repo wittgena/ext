@@ -1,8 +1,9 @@
-# xphi.state.phase.network.channel.codec
+# xphi.state.network.channel.codec
+## @lineage: xphi.state.phase.network.channel.codec
 ## @lineage: xphi.kernel.phase.network.channel.codec
 import json
 from typing import Any
-from xphi.state.phase.network.channel.pipeline import DuplexChannel, ChannelContext
+from xphi.state.network.channel.pipeline import DuplexChannel, ChannelContext
 from xphi.watcher.plane.emitter import get_emitter
 
 log = get_emitter("channel.codec")

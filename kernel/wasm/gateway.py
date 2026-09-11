@@ -1,8 +1,8 @@
 # xphi.kernel.wasm.gateway
-## @lineage: fiber.infra.wasm.bridge
 import json
 import threading
 import ctypes
+import time
 from typing import Any, Dict, List
 from pathlib import Path
 
@@ -87,20 +87,14 @@ class GatewayWasm:
         if req_len > self.MAX_INPUT_SIZE:
             raise MemoryBoundaryError(f"Payload exceeds boundary ({self.MAX_INPUT_SIZE}B).")
 
-        # 현재 스레드의 독립된 WASM 컨텍스트 로드 (Lock-Free)
         tls = self._get_local_instance()
         res_ptr = None
         
         try:
-            # 1. Thread-Local 메모리 덮어쓰기 (경합 없음)
             tls.memory.write(tls.store, payload_bytes, tls.input_ptr)
-            
-            # 2. Execute
             res_ptr = tls.execute_gateway(tls.store, tls.input_ptr)
             if res_ptr == 0:
                 raise GatewayRuptureError("Gateway Panic: Null pointer returned.")
-                
-            # 3. Fast Read
             return self._read_c_string_fast(tls, res_ptr)
             
         finally:
@@ -110,17 +104,62 @@ class GatewayWasm:
                 except Exception as e:
                     log.error(f"[Gateway] C-String dealloc failed: {e}")
 
+    # =====================================================================
+    # Routing Wrappers for C-FFI
+    # =====================================================================
+
     def evaluate_intent(self, dimension: int, base_friction: float, raw_payload: str, state_vector: List[int]) -> Dict[str, Any]:
+        """기존 L0 Computing Parser 라우팅"""
         req_payload = {
+            "target_module": "intent_parser",
             "dimension": dimension,
             "base_friction": base_friction,
             "raw_payload": raw_payload,
             "state_vector": state_vector
         }
+        return self._safe_invoke(req_payload)
+
+    def execute_transaction_fsm(self, fsm_state: Dict[str, Any], event: Dict[str, Any]) -> Dict[str, Any]:
+        """Transaction FSM 라우팅 (상태 기계 평가)"""
+        req_payload = {
+            "target_module": "transaction_fsm",
+            "fsm_state": fsm_state,
+            "event": event
+        }
+        return self._safe_invoke(req_payload)
+
+    # [NEW] Defin FSM을 WASM으로 넘기기 위한 래퍼 메서드 추가
+    def execute_defin_fsm(self, fsm_state: Dict[str, Any], event: Dict[str, Any]) -> Dict[str, Any]:
+        """Defin FSM 라우팅 (상태 기계 평가)"""
+        req_payload = {
+            "target_module": "defin_fsm", # Rust 측 GatewayRequest::DefinFsm 과 매핑됨
+            "fsm_state": fsm_state,
+            "event": event
+        }
+        return self._safe_invoke(req_payload)
+
+    def _safe_invoke(self, payload_dict: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            json_str = json.dumps(req_payload, separators=(',', ':'))
+            # 1. Payload 직렬화 및 크기 측정
+            json_str = json.dumps(payload_dict, separators=(',', ':'))
+            payload_size_kb = len(json_str.encode('utf-8')) / 1024.0
+            
+            target_module = payload_dict.get("target_module", "unknown")
+            log.info(f"⚡ [WASM Gateway] '{target_module}' 모듈 호출 준비 ({payload_size_kb:.2f} KB)")
+            
+            # 2. 실행 시간 측정 및 FFI 타격
+            start_time = time.perf_counter()
             res_str = self.invoke_raw_ffi(json_str)
-            return json.loads(res_str)
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            
+            # 3. 결과 파싱 및 로깅
+            receipt = json.loads(res_str)
+            if receipt.get("success"):
+                log.info(f"✅ [WASM Gateway] '{target_module}' 모듈 실행 성공 (소요시간: {elapsed_ms:.2f} ms)")
+            else:
+                log.warning(f"⚠️ [WASM Gateway] '{target_module}' 모듈 실행 실패 (Revert: {receipt.get('revert_reason')})")
+                
+            return receipt
             
         except MemoryBoundaryError as mbe:
             log.warning(f"🛡️ [Circuit Breaker Triggered] {mbe}")
