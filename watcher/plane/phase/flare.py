@@ -1,6 +1,4 @@
 # xphi.watcher.plane.phase.flare
-## @lineage: fiber.phase.plane.flare
-## @lineage: fiber.phase.kernel.plane.flare
 import json
 import asyncio
 import shutil

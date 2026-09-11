@@ -21,7 +21,7 @@ from xphi.watcher.server.stream.schema import (
 )
 from xphi.watcher.plane.emitter import flow_scope, get_emitter
 from xphi.watcher.plane.observer.span import span_context
-from xphi.watcher.receptor.policy.gateway import ToposGateway
+from xphi.watcher.tracer.chaos.gateway import ToposGateway
 
 log = get_emitter("ingress.sentinel", phase="DEFENSE")
 

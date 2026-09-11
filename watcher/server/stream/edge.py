@@ -19,7 +19,7 @@ from xphi.watcher.server.stream.schema import (
     ProtocolSource
 )
 from xphi.watcher.receptor.audit.warden import AuditWarden
-from xphi.watcher.receptor.policy.gateway import ToposGateway
+from xphi.watcher.tracer.chaos.gateway import ToposGateway
 from xphi.arch.model.edge.receipt import LogstEvent
 from xphi.watcher.plane.emitter import get_emitter
 

@@ -1,6 +1,4 @@
 # xphi.state.phase.runtime.node
-## @lineage: xphi.state.runtime.node
-## @lineage: xphi.kernel.phase.runtime.node
 import asyncio
 import time
 import json
@@ -229,8 +227,6 @@ class NodeRuntime(IPhaseAtor):
         self.supervisor.mount_daemon(master_control_bus)
         
         self.log.info(f"Master Infra Layer (ControlBus) mounted successfully. (Profile: {node_profile})")
-
-        # [개선] 프로파일이 ALL 이거나 COMPUTE 일 때만 Worker 프로세스 스폰 (EDGE 등은 차단)
         if node_profile in ["ALL", "COMPUTE"]:
             worker_count = int(os.environ.get("DPHI_FIXED_WORKERS", multiprocessing.cpu_count()))
             self.log.info(f"Spawning {worker_count} isolated Worker Processes for pure computation...")

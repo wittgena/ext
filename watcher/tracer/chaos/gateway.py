@@ -1,4 +1,5 @@
-# xphi.watcher.receptor.policy.gateway
+# xphi.watcher.tracer.chaos.gateway
+## @lineage: xphi.watcher.receptor.policy.gateway
 import uuid
 import time
 import json
@@ -87,12 +88,7 @@ class ToposGateway:
         }
 
     async def authorize_ingress(self, stream: IngressLogicStream) -> bool:
-        """
-        @desc: Structural adapter for Ingress validation using Pydantic Schema.
-               이 메서드가 호출되면 파이썬 타입 안정성이 보장됩니다.
-        """
         action_id = str(stream.meta.stream_id)
-        # payload.parameters 내에 "action" 키가 명시되어 있다면 오버라이드 (LogStreamStore 호환)
         action = stream.payload.parameters.get("action", stream.payload.intent.value) 
         payload = stream.payload.parameters.get("data", stream.payload.parameters)
         

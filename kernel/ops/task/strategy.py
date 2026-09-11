@@ -1,6 +1,4 @@
 # xphi.kernel.ops.task.strategy
-## @lineage: xphi.kernel.daemon.task.strategy
-## @lineage: kernel.daemon.task.strategy
 import json
 import threading
 import queue
@@ -17,7 +15,7 @@ from xphi.kernel.wasm.cgroup import CgroupPolicy
 class ExecutionStrategy:
     """Class-based Execution Strategy for isolated sandboxing and execution"""
     
-    def __init__(self, prewarm_pool_size: int = 11):
+    def __init__(self, prewarm_pool_size: int = 5):
         self.prewarm_pool_size = prewarm_pool_size
         self.py_pool = queue.Queue(maxsize=self.prewarm_pool_size)
         self._pool_lock = threading.Lock()
