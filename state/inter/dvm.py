@@ -1,6 +1,4 @@
 # xphi.state.inter.dvm
-## @lineage: xphi.kernel.phase.inter.dvm
-## @lineage: kernel.phase.inter.dvm
 import json
 import threading
 import os
@@ -16,8 +14,8 @@ except ImportError:
 from xphi.arch.contract.interpreter import ExecutionError, ExecutionResult
 from xphi.kernel.space.bind.resolver import resolve_path
 from xphi.kernel.wasm.cgroup import WasmCgroup, CgroupPolicy, Tier
-from xphi.state.inter.wasm import WasmInterpreter
 
+from xphi.state.inter.wasm import WasmInterpreter
 from xphi.watcher.plane.emitter import get_emitter
 
 TIME_ROOT = resolve_path("time")
@@ -26,6 +24,7 @@ log = get_emitter("inter.dvm", phase="SYSTEM")
 _GLOBAL_ENGINE = None
 _GLOBAL_MODULE_CACHE = {}
 _CACHE_LOCK = threading.Lock()
+
 
 def get_cached_module(wasm_path: str, cg_policy: WasmCgroup):
     global _GLOBAL_ENGINE, _GLOBAL_MODULE_CACHE
@@ -44,6 +43,8 @@ def get_cached_module(wasm_path: str, cg_policy: WasmCgroup):
             log.info(f"✅ [AOT Compile] {Path(wasm_path).name} cached successfully.")
             
         return _GLOBAL_ENGINE, _GLOBAL_MODULE_CACHE[wasm_path]
+
+
 # ============================================================================
 
 class DvmInterpreter:
@@ -142,13 +143,17 @@ class DvmInterpreter:
                         env_data = payload.get("env", {})
                         info_data = payload.get("info", {})
                         msg_data = payload.get("msg", {})
-                        
                         state_snapshot = payload.get("state_snapshot") or {}
                         
                         try:
-                            from xphi.state.inter.cosm import CosmWasmInterpreter
-                            with CosmWasmInterpreter(wasm_module_name=wasm_file, policy=self.policy, initial_state=state_snapshot) as cosm_sandbox:
-                                res = cosm_sandbox.execute(env_data, info_data, msg_data)
+                            # [핵심 변경점] 통합된 WasmInterpreter를 abi="cosmwasm" 파라미터와 함께 호출합니다.
+                            with WasmInterpreter(
+                                wasm_module_path=wasm_file, 
+                                policy=self.policy, 
+                                abi="cosmwasm", 
+                                initial_state=state_snapshot
+                            ) as cosm_sandbox:
+                                res = cosm_sandbox.invoke_cosmwasm(env_data, info_data, msg_data)
                                 
                                 if res.success:
                                     native_result = json.loads(res.output)
@@ -197,13 +202,17 @@ class DvmInterpreter:
         
         # 0. Type Sanitization
         if isinstance(state_snapshot, str):
-            try: state_snapshot = json.loads(state_snapshot)
-            except: state_snapshot = {}
+            try:
+                state_snapshot = json.loads(state_snapshot)
+            except Exception:
+                state_snapshot = {}
         state_snapshot = state_snapshot or {}
 
         if isinstance(context, str):
-            try: context = json.loads(context)
-            except: context = {}
+            try:
+                context = json.loads(context)
+            except Exception:
+                context = {}
         context = context or {}
 
         gas_limit = self.policy.cpu_fuel_quota if self.policy.tier == Tier.STANDARD else 30_000_000
@@ -228,9 +237,12 @@ class DvmInterpreter:
                 "gas_limit": gas_limit,
                 "state_snapshot": state_snapshot
             }
-            if caller: inner_payload["caller_address"] = caller
-            if value and value != "0": inner_payload["value"] = value
-            if block_context: inner_payload["block_context"] = block_context
+            if caller:
+                inner_payload["caller_address"] = caller
+            if value and value != "0":
+                inner_payload["value"] = value
+            if block_context:
+                inner_payload["block_context"] = block_context
 
         elif vm_target.upper() == "COSMWASM_INTERNAL":
             inner_payload = {
@@ -252,9 +264,6 @@ class DvmInterpreter:
         }
         
         log.info(f"[dvm.wasm] Routing TX to {vm_target.upper()} on {target_address} (Gas Limit: {gas_limit})")
-        
-        # 🌟🌟🌟 [핵심 디버그 로그 추가] 🌟🌟🌟
-        # Rust(WASM)로 넘어가기 직전의 JSON 구조 전체를 화면에 덤프합니다.
         log.info(f"🔥 [DEBUG FFI PAYLOAD] Unified Input to Rust:\n{json.dumps(unified_input, indent=2)}")
         
         try:
@@ -336,10 +345,9 @@ class DvmInterpreter:
         self._wasm_alloc = None
         self._wasm_dealloc = None
         self._wasm_execute_router = None
-        self._owner_thread = None
 
-    def __enter__(self):
+    def __enter__(self) -> "DvmInterpreter":
         return self
 
-    def __exit__(self, *_):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         self.shutdown()

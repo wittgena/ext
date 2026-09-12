@@ -1,20 +1,23 @@
 # xphi.kernel.ops.boot
 import os
+import json
 import asyncio
 from typing import Optional
 
 from xphi.arch.event.next import LogEvent
 from xphi.arch.event.psi import PsiEvent, PsiCarrier, CarrierType
 from xphi.arch.event.bus import AsyncEventBus
-from xphi.state.phase.executor.base import BaseExecutor
 from xphi.arch.contract.registry.unified import registry
 
-from xphi.kernel.space.topos.tunnel.factory import TunnelFactory
+from xphi.state.phase.executor.base import BaseExecutor
 from xphi.state.phase.executor.swarm import SwarmExecutor
 from xphi.state.phase.flow.executor import FlowExecutor
 from xphi.state.phase.reactor import PhaseReactor
 from xphi.state.phase.runtime.node import NodeRuntime
 from xphi.state.ledger.consensus import KernelLedger
+from xphi.state.ledger.gateway import GatewayPolicy 
+
+from xphi.kernel.space.topos.tunnel.factory import TunnelFactory
 from xphi.kernel.wasm.broker import DphiBroker
 
 from xphi.watcher.plane.observer.event import EventObserver
@@ -28,7 +31,6 @@ _node_instance: Optional[NodeRuntime] = None
 _background_tasks = set()
 
 class PhaseSignal(EventObserver):
-    """표면(Surface) 로그 이벤트를 커널 내부의 PsiEvent(SIGNAL)로 승격하여 브리지하는 옵저버"""
     def __init__(self, event_bus: AsyncEventBus):
         self.bus = event_bus
         self.log = get_emitter("anchor.bridge", phase="BRANE")
@@ -42,7 +44,7 @@ class PhaseSignal(EventObserver):
         payload.update({
             "bridged_from": "Surface.LogEvent",
             "original_source": getattr(event, 'source_id', 'unknown'),
-            "boundary": "brane_to_kernel"
+            "boundary": "surface_to_kernel"
         })
 
         carrier = PsiCarrier(
@@ -55,7 +57,7 @@ class PhaseSignal(EventObserver):
         psi_event = PsiEvent(
             event_id=event.event_id,
             parent_id=getattr(event, 'parent_id', None),
-            source_id="anchor.phase.bridge", 
+            source_id="phase.bridge", 
             scope=getattr(event, 'scope', 'GLOBAL'),
             tick=getattr(event, 'tick', 0) or 0,
             phase_id=getattr(event, 'phase_id', 0),
@@ -79,9 +81,7 @@ class PhaseSignal(EventObserver):
         except Exception as e:
             self.log.error(f"[PhaseBridge] Dispatch failed for {original_msg}: {e}", exc_info=True)
 
-
 class RoutingExecutor(BaseExecutor):
-    """CLI 태스크 타입(Flow vs Swarm)에 따라 적절한 실행기(Executor)로 동적 라우팅"""
     def __init__(self, completion_signal: asyncio.Event):
         super().__init__()
         self.completion_signal = completion_signal
@@ -128,6 +128,32 @@ async def main_async():
     
     bridge_watcher = PhaseSignal(event_bus=system_bus)
     default_plane.attach(bridge_watcher)
+
+    ## Gateway 보안 정책(Action Cost, Rate Limit) 동적 주입
+    log.info("[Boot] Injecting Gateway Security Policies...")
+    try:
+        env_costs_str = os.getenv("GATEWAY_ACTION_COSTS", "{}")
+        env_costs = json.loads(env_costs_str)
+        
+        env_trusted_str = os.getenv("GATEWAY_TRUSTED_ACTIONS", "")
+        if env_trusted_str:
+            env_trusted = {a.strip() for a in env_trusted_str.split(",") if a.strip()}
+        else:
+            # 설정값이 없으면 시스템의 필수 안전 동작들을 기본 신뢰 액션으로 지정
+            env_trusted = {"LOGSTREAM_BULK_INSERT", "SECURITY_TENSION_ALERT", "AUDIT_LOG_APPEND"}
+            
+        capacity = int(os.getenv("GATEWAY_RATE_CAPACITY", "100"))
+        refill = float(os.getenv("GATEWAY_RATE_REFILL", "5.0"))
+        
+        GatewayPolicy.configure(
+            action_costs=env_costs,
+            trusted_actions=env_trusted,
+            capacity=capacity,
+            refill=refill
+        )
+        log.info(f"[Boot] Gateway Policies applied: capacity={capacity}, refill={refill}, trusted_actions={len(env_trusted)}")
+    except Exception as e:
+        log.error(f"[Boot] Failed to inject Gateway policies. Using safe defaults. Error: {e}")
     
     log.info("[Boot] Igniting Physical Membrane Receptor...")
     tunnel = await TunnelFactory.get_default()
@@ -177,7 +203,6 @@ async def main_async():
     log.info("[Boot] Entering observation mode (External layers delegated to Daemons).")
     await _node_instance.wait_until_stopped()
 
-
 async def teardown():
     global _node_instance
     log.info("[Boot] Releasing system resources...")
@@ -191,16 +216,15 @@ async def teardown():
         if not task.done():
             task.cancel()
 
-    # 3. Ledger DB 정리 (물리적 자원 및 Lock 해제)
+    # 3. Ledger DB 정리
     try:
         KernelLedger().close()
         log.info("[Boot] KernelLedger lock safely released.")
     except Exception as e:
         log.warning(f"[Boot] Error while releasing KernelStore lock: {e}")
         
-    # 4. Redis 터널 정리 (통신망 회수)
+    # 4. Redis 터널 정리
     await TunnelFactory.close_all()
-    
     log.info("[Boot] Resource cleanup complete.")
 
 if __name__ == "__main__":

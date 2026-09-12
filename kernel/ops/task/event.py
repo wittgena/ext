@@ -1,8 +1,4 @@
 # xphi.kernel.ops.task.event
-## @lineage: xphi.kernel.daemon.task.event
-## @lineage: kernel.daemon.task.event
-## @lineage: kernel.phase.daemon.task.event
-## @lineage: phase.runtime.daemon.task.event
 import time
 import uuid
 import json
@@ -11,10 +7,6 @@ from typing import Dict, Any, List, Optional
 
 @dataclass
 class TaskSummaryEvent:
-    """
-    이벤트 버스(PsiCarrier)에 탑재될 초경량 요약 모델.
-    수신자는 detail_key를 통해 Redis에서 상세 데이터를 조회할 수 있습니다.
-    """
     task_id: str
     command: str          # 실행 파일/명령어 명 (ex: "meta.anchor.modeler")
     status: str           # "SUCCESS", "FAILED", "PARTIAL"

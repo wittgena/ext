@@ -1,6 +1,4 @@
 # xphi.kernel.ops.task.wasm
-## @lineage: xphi.kernel.daemon.task.wasm
-## @lineage: kernel.daemon.task.wasm
 import os
 import json
 import asyncio
@@ -25,7 +23,7 @@ REDIS_GROUP_NAME      = "wasm_tasker_group"
 
 DEFAULT_WASM_PATH     = "dphi.wasm"
 DEFAULT_TIER          = "STANDARD"
-DEFAULT_CONCURRENCY   = 11
+DEFAULT_CONCURRENCY   = 5
 POLL_TIMEOUT_MS       = 1000
 
 class TaskWasm(AbstractDaemon):

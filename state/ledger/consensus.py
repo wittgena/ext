@@ -1,5 +1,4 @@
 # xphi.state.ledger.consensus
-## @lineage: xphi.kernel.dphi.ledger.consensus
 import time
 import json
 import hashlib
@@ -12,7 +11,6 @@ from rocksdict import Rdict, Options, AccessType
 
 from xphi.kernel.space.topos.tunnel.factory import TunnelFactory
 from xphi.kernel.space.bind.resolver import resolve_path
-from xphi.watcher.receptor.audit.warden import AuditWarden
 
 from xphi.kernel.wasm.broker import DphiBroker  
 from xphi.bound.adapter.sign import NodeSigner
@@ -100,6 +98,8 @@ class KernelLedger:
             else:
                 raise 
 
+        # [순환 참조 해결] AuditWarden 지연 로딩 (Lazy Import)
+        from xphi.watcher.receptor.warden import AuditWarden
         AuditWarden.register_anomaly_handler(self._handle_warden_anomaly)
 
     def _handle_warden_anomaly(self, action: str, details: str) -> None:
@@ -154,6 +154,9 @@ class KernelLedger:
         return self._put_object("commit", asdict(commit))
 
     def seal_system_epoch(self, commit: KernelCommit, signatures: List[str], threshold: int = 1) -> str:
+        # [순환 참조 해결] AuditWarden 지연 로딩 (Lazy Import)
+        from xphi.watcher.receptor.warden import AuditWarden
+
         if not signatures:
             error_msg = "System Epoch Seal Rejected: No signatures provided."
             log.critical(f"[KernelStore: PRIVILEGE] {error_msg}")
@@ -165,7 +168,7 @@ class KernelLedger:
         valid_count = 0
         for sig in signatures:
             try:
-                ## NodeSigner verifies the signature against the canonical payload hash
+                # NodeSigner verifies the signature against the canonical payload hash
                 if signer.verify_signature(canonical_bytes, sig):
                     valid_count += 1
             except Exception as e:
@@ -183,7 +186,6 @@ class KernelLedger:
 
     async def propose_and_seal(self, stream: LogicStream) -> Optional[SealedKernel]:
         if self.role == LedgerRole.FOLLOWER:
-            # [핵심 수정] Redis Stream 저장을 위해 payload와 metadata를 안전하게 직렬화(Serialization)
             stream_data = {
                 "id": str(stream.id), 
                 "action": str(stream.action), 

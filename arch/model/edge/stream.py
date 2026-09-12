@@ -1,9 +1,5 @@
-# xphi.watcher.server.stream.schema
-## @lineage: xphi.watcher.ingress.stream.schema
-## @lineage: xphi.xor.stream.schema
-## @lineage: xphi.arch.xor.stream.schema
-## @lineage: arch.xor.stream.schema
-## @lineage: kernel.phase.stream.schema
+# xphi.arch.model.edge.stream
+## @lineage: xphi.watcher.server.stream.schema
 from pydantic import BaseModel, Field
 from typing import Any, Dict
 from enum import Enum

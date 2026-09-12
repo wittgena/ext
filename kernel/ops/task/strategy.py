@@ -1,6 +1,4 @@
 # xphi.kernel.ops.task.strategy
-## @lineage: xphi.kernel.daemon.task.strategy
-## @lineage: kernel.daemon.task.strategy
 import json
 import threading
 import queue
@@ -17,7 +15,7 @@ from xphi.kernel.wasm.cgroup import CgroupPolicy
 class ExecutionStrategy:
     """Class-based Execution Strategy for isolated sandboxing and execution"""
     
-    def __init__(self, prewarm_pool_size: int = 11):
+    def __init__(self, prewarm_pool_size: int = 5):
         self.prewarm_pool_size = prewarm_pool_size
         self.py_pool = queue.Queue(maxsize=self.prewarm_pool_size)
         self._pool_lock = threading.Lock()
@@ -84,18 +82,31 @@ class ExecutionStrategy:
             
             vm_target = safe_dict.get("vm_target", "EVM")
 
+            # =========================================================================
+            # [핵심 수정] 외부 CosmWasm 샌드박스 실행을 통합된 WasmInterpreter로 교체
+            # =========================================================================
             if vm_target == "COSMWASM_EXTERNAL":
                 target_wasm_file = safe_dict.get("target_wasm_file", "cw20_base.wasm")
                 log.info(f"[{job_id[:8]}] 🔓 Entering Pure CosmWasm Jail: {target_wasm_file} (Tier: {job_policy.tier.value})")
                 
-                from xphi.state.inter.cosm import CosmWasmInterpreter
-                with CosmWasmInterpreter(wasm_module_name=target_wasm_file, policy=job_policy, initial_state=safe_dict.get("state_snapshot", {})) as cosm_sandbox:
-                    res = cosm_sandbox.execute(
+                # WasmInterpreter를 abi="cosmwasm" 모드로 호출합니다.
+                with WasmInterpreter(
+                    wasm_module_path=target_wasm_file, 
+                    policy=job_policy, 
+                    abi="cosmwasm", 
+                    initial_state=safe_dict.get("state_snapshot", {})
+                ) as cosm_sandbox:
+                    
+                    res = cosm_sandbox.invoke_cosmwasm(
                         env_data=safe_dict.get("env", {}),
                         info_data=safe_dict.get("info", {}),
                         msg_data=safe_dict.get("msg", {})
                     )
-                    metrics = {"gas_used": 0} 
+                    
+                    # WasmInterpreter의 get_metrics() 활용
+                    metrics = cosm_sandbox.get_metrics() 
+                    if not metrics:
+                        metrics = {"gas_used": 0}
                     
                     if res.success:
                         with suppress(Exception):
@@ -110,6 +121,9 @@ class ExecutionStrategy:
                         "error": str(res.error) if not res.success else "", "metrics": metrics
                     }
 
+            # =========================================================================
+            # 기존 DVM 멀티 라우터 실행은 변경 없이 유지
+            # =========================================================================
             log.info(f"[{job_id[:8]}] 🔓 Entering Stateless Multi-VM Jail: {target_path.name} (Tier: {job_policy.tier.value}, Target: {vm_target})")
             
             with DvmInterpreter(wasm_module_name=target_path.name, policy=job_policy) as dvm_sandbox:
