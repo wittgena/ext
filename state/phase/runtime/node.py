@@ -16,7 +16,7 @@ from xphi.arch.contract.interface import IPhaseAtor, IPhaseField, IEventBus
 from xphi.arch.contract.registry.unified import registry
 
 from xphi.kernel.space.bind.resolver import find_current_self
-from xphi.state.phase.executor.swarm import SwarmExecutor
+from xphi.state.phase.executor.cont import SwarmExecutor
 from xphi.state.phase.runtime.sensor import SurfaceSensor, SurfaceActuator
 from xphi.state.phase.runtime.context import RuntimeContext
 from xphi.kernel.ops.task.supervisor import TaskSupervisor, Dispatcher

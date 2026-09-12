@@ -1,17 +1,4 @@
 # xphi.arch.event.psi
-"""
-@flow:
-Ψ (carrier)
- → ∂Φ (domain boundary resolve)
- → Φ′ (phase transition evaluation)
- → {θ resonance | θ interference}
- → δ (optional structural anchoring)
- → Φ⁺ (anchored structure)
-
-Provides both the foundational data structures (PsiCarrier, PsiEvent) 
-and the abstract network operational patterns (Disperser, Router, Aligner, etc.)
-to manipulate those structures across the phase space.
-"""
 from __future__ import annotations
 
 import time

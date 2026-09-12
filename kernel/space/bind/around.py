@@ -46,7 +46,7 @@ DEFAULT_BOUND_SKELETON = {
         "log": ":io:/log",
         "ailog": ":io:/ailog",
         "sandbox": ":workspace:",
-        "origin": ":kernel:/space/origin",
+        "origin": ":kernel:/space/bind/origin",
         "time": ":kernel:/space/time",
         "flaretime": ":kernel:/space/time/flare",
         "surface": ":io:/surface",

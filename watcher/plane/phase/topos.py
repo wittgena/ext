@@ -299,7 +299,6 @@ RUN pip install --no-cache-dir git+https://github.com/wittgena/fiber.git@{git_re
             if self.gateway_logs: 
                 self.gateway_logs.detach()
                 
-            # 💡 Keep-Workspace 옵션 보존
             if not self.keep_workspace:
                 await self.adapter.teardown()
                 if self.workspace.exists():

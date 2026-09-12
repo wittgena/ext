@@ -7,7 +7,7 @@ from rocksdict import Rdict, Options, AccessType
 from xphi.kernel.space.bind.resolver import resolve_path
 from xphi.watcher.plane.emitter import get_emitter
 from xphi.kernel.wasm.broker import DphiBroker, DphiMethod
-from xphi.bound.adapter.state import StateAdapter
+from xphi.arch.bound.adapter.state import StateAdapter
 
 log = get_emitter("ledger.oracle", phase="KERNEL")
 LEDGER_DB_PATH = resolve_path("ledger")

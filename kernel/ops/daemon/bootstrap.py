@@ -19,7 +19,7 @@ from xphi.kernel.ops.task.supervisor import TaskSupervisor, Dispatcher
 from xphi.state.phase.runtime.context import RuntimeContext
 from xphi.state.phase.runtime.sensor import SurfaceSensor
 from xphi.watcher.plane.emitter import get_emitter
-from xphi.state.phase.flow.cont import LoopCarrier, DynamicsXe
+from xphi.state.phase.executor.cont import LoopCarrier, DynamicsXe
 
 log = get_emitter("daemon.bootstrap")
 SENSOR_INTERVAL = 1.0

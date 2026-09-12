@@ -5,8 +5,8 @@ import asyncio
 from functools import wraps
 from typing import List, Tuple, Dict, Any, Optional, Generic, TypeVar, Union, Callable
 
-from xphi.bound.xor.parser.ruleset.stream import ElasticDSLRulesetParser, LocalStreamRulesetParser
-from xphi.bound.xor.parser.ruleset.engine import CompiledEngine
+from xphi.arch.bound.xor.parser.ruleset.stream import ElasticDSLRulesetParser, LocalStreamRulesetParser
+from xphi.arch.bound.xor.parser.ruleset.engine import CompiledEngine
 from xphi.arch.contract.registry.tracer import TracerRegistry
 from xphi.watcher.plane.emitter import get_emitter
 from xphi.watcher.tracer.bound import (

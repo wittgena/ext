@@ -1,11 +1,4 @@
 # xphi.watcher.plane.observer.span
-## @lineage: watcher.plane.observer.span
-## @lineage: ops.watcher.topos
-"""
-@desc: Native topological telemetry
-- Preserves legacy dependency signatures while transparently collapsing 
-- external observation vectors into the internal flow manifold (flow_scope).
-"""
 import os
 import inspect
 import functools
@@ -26,10 +19,6 @@ def should_enable_observability() -> bool:
     return False
 
 class _NativeTracerBackend:
-    """
-    @desc: Inert pass-through boundary. Neutralizes legacy span lifecycle 
-    signals (start/end) without triggering topological anomalies.
-    """
     def start_active_span(self, name: str, session_id: str | None = None):
         pass
 

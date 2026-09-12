@@ -8,7 +8,7 @@ from pathlib import Path
 from dataclasses import asdict
 from datetime import datetime, timezone
 from xphi.arch.event.next import LogEvent
-from xphi.watcher.plane.observer.event import EventObserver
+from xphi.arch.event.next import EventObserver
 from xphi.watcher.plane.surface.console import ConsoleSurface
 
 def _safe_json_serializer(obj):

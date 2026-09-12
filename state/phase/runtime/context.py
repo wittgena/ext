@@ -1,6 +1,4 @@
 # xphi.state.phase.runtime.context
-## @lineage: xphi.state.runtime.context
-## @lineage: xphi.kernel.phase.runtime.context
 from typing import Any
 from dataclasses import dataclass
 

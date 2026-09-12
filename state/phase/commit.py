@@ -7,8 +7,8 @@ from typing import Dict, List, Optional, Callable, Any
 from pathlib import Path
 
 from xphi.kernel.wasm.broker import DphiBroker
-from xphi.bound.adapter.sign import LedgerAuthAdapter
-from xphi.bound.adapter.state import StateAdapter
+from xphi.arch.bound.adapter.sign import LedgerAuthAdapter
+from xphi.arch.bound.adapter.state import StateAdapter
 from xphi.watcher.plane.emitter import get_emitter
 from xphi.state.ledger.consensus import KernelLedger, ToposBlob
 

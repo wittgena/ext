@@ -13,8 +13,8 @@ from xphi.kernel.space.topos.tunnel.factory import TunnelFactory
 from xphi.kernel.space.bind.resolver import resolve_path
 
 from xphi.kernel.wasm.broker import DphiBroker  
-from xphi.bound.adapter.sign import NodeSigner
-from xphi.bound.adapter.state import StateAdapter
+from xphi.arch.bound.adapter.sign import NodeSigner
+from xphi.arch.bound.adapter.state import StateAdapter
 from xphi.watcher.plane.emitter import get_emitter
 
 log = get_emitter("kernel.ledger", phase="KERNEL")

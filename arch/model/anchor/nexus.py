@@ -9,9 +9,9 @@ import hashlib
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
 
-from xphi.bound.adapter.settlement import TransactionReceipt
+from xphi.arch.bound.adapter.settlement import TransactionReceipt
 from xphi.kernel.wasm.broker import DphiBroker
-from xphi.bound.adapter.state import StateAdapter
+from xphi.arch.bound.adapter.state import StateAdapter
 from xphi.watcher.plane.emitter import get_emitter
 
 log = get_emitter("adapter.anchor")

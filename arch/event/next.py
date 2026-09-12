@@ -6,7 +6,7 @@ import random
 import uuid as _std_uuid
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, Annotated, Tuple
+from typing import Dict, Any, List, Optional, Annotated, Tuple, Protocol
 from datetime import UTC, datetime
 
 from pydantic import Field
@@ -248,3 +248,7 @@ class LogEvent:
     density: float = 0.0
     gain: float = 1.0
     fold_count: int = 1
+
+class EventObserver(Protocol):
+    def update(self, event: LogEvent) -> None:
+        ...

@@ -8,7 +8,7 @@ import queue
 from dataclasses import asdict
 from typing import Optional
 from xphi.arch.event.next import LogEvent
-from xphi.watcher.plane.observer.event import EventObserver
+from xphi.arch.event.next import EventObserver
 
 class TunnelSurface(EventObserver):
     def __init__(self, max_batch_size: int = 50, flush_interval: float = 0.2):

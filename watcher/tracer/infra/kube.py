@@ -6,18 +6,28 @@ import ssl
 import inspect
 import asyncio
 import httpx
-from typing import Optional, Any, Dict, List
+import math
+import uuid
+from abc import ABC, abstractmethod
+from typing import Dict, Any, List, Optional
 
 # Arch & Topos Imports
-from xphi.state.network.channel.pipeline import ChannelPipeline, ChannelContext, DuplexChannel
-from xphi.state.network.channel.codec import JsonMessageCodec
+from xphi.arch.event.psi import PsiEvent, PsiCarrier
+from xphi.arch.contract.interface import IPhaseAtor, IPhaseField
+from xphi.arch.event.bus import AsyncEventBus
+from xphi.arch.contract.registry.unified import contract
+from xphi.state.phase.channel import ChannelPipeline, ChannelContext, DuplexChannel
+from xphi.state.phase.channel import JsonMessageCodec
 
 # Watcher Imports
-from xphi.watcher.plane.metric.scale.emitter import IScaleAdapter
 from xphi.watcher.plane.emitter import get_emitter
 from xphi.watcher.tracer.bound import BaseBoundary, BaseStreamAuditor, BaseAuditor
 
-"""METADATA & CONFIGURATION"""
+
+# =====================================================================
+# 1. METADATA & CONFIGURATION
+# =====================================================================
+
 META_INFO = {
     "VERSION": "2.0.0 (Pure Async Pipeline & httpx Edition)",
     "SYSTEM": "Kube-Self ISO Engine (Zero-Dependency Micro-SDK)"
@@ -28,9 +38,29 @@ KUBE_API_SPECS = {
     "deployments": {"base": "/apis/apps/v1", "verbs": ["list", "patch"], "ns": True}
 }
 
-log = get_emitter("tracer.kube")
+scale_log = get_emitter("scale.emitter")
+kube_log = get_emitter("tracer.kube")
 
-"""CORE CLIENT & BOUNDARY"""
+
+# =====================================================================
+# 2. INTERFACES
+# =====================================================================
+
+class IScaleAdapter(ABC):
+    """@desc: 인프라(K8s, AWS, Docker 등)에 의존하지 않는 범용 스케일링 인터페이스"""
+    @abstractmethod
+    async def initialize(self) -> None:
+        pass
+        
+    @abstractmethod
+    async def apply_scale(self, target_resource: str, replicas: int) -> bool:
+        pass
+
+
+# =====================================================================
+# 3. CORE CLIENT & BOUNDARY (Infrastructure Layer)
+# =====================================================================
+
 class AsyncKubeClient:
     """@desc: urllib를 제거하고 httpx 기반으로 재탄생한 비동기 KubeClient"""
     def __init__(self):
@@ -68,7 +98,7 @@ class AsyncKubeClient:
         return f"{path}?{q_str}" if q_str else path
 
     async def validate(self):
-        log.info(f"[Φ:Validate] K8s 비동기 API 스캔 시작 ({META_INFO['VERSION']})")
+        kube_log.info(f"[Φ:Validate] K8s 비동기 API 스캔 시작 ({META_INFO['VERSION']})")
         checked = {}
         for res, spec in KUBE_API_SPECS.items():
             base = spec["base"]
@@ -80,7 +110,7 @@ class AsyncKubeClient:
                 raise RuntimeError(f"리소스 누락: {base}/{res}")
             if any(v not in checked[base][res] for v in spec["verbs"]): 
                 raise RuntimeError(f"권한 누락: '{res}' 접근 불가")
-        log.info("[Φ:Validate] 스펙/권한 100% 일치 확인.")
+        kube_log.info("[Φ:Validate] 스펙/권한 100% 일치 확인.")
 
     async def request(self, method: str, path: str, payload: dict = None):
         url = f"{self.server}{path}"
@@ -94,6 +124,48 @@ class AsyncKubeClient:
 
     async def close(self):
         await self.http.aclose()
+
+
+# =====================================================================
+# 4. TRANSPORT & CHANNELS (Network Layer)
+# =====================================================================
+
+class KubeWatchTransport:
+    """@desc: K8s Watch API의 HTTP Chunk 스트림을 읽어 파이프라인으로 주입하는 Async Transport"""
+    def __init__(self, pipeline: ChannelPipeline, client: httpx.AsyncClient, url: str):
+        self.pipeline = pipeline
+        self.client = client
+        self.url = url
+        self.is_running = False
+        self._task: Optional[asyncio.Task] = None
+        self.log = get_emitter("kube.transport")
+
+    async def connect(self) -> None:
+        self.is_running = True
+        await self.pipeline.fire_channel_active()
+        self._task = asyncio.create_task(self._stream_watch())
+
+    async def _stream_watch(self) -> None:
+        try:
+            async with self.client.stream("GET", self.url) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_bytes():
+                    if not self.is_running:
+                        break
+                    if chunk:
+                        await self.pipeline._process_read(chunk)
+                        
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            self.log.error(f"  [TRANSPORT_FAULT] Stream interrupted: {e}")
+            await self.pipeline._process_exception(e)
+
+    def disconnect(self) -> None:
+        self.is_running = False
+        if self._task and not self._task.done():
+            self._task.cancel()
+
 
 class KubeBound(BaseBoundary):
     """@desc: ThreadPool을 완벽히 제거하고 비동기 Pipeline과 httpx로 구동되는 새로운 KubeBound"""
@@ -123,7 +195,6 @@ class KubeBound(BaseBoundary):
             raise
 
     def attach_stream(self, path: str) -> 'KubeWatchTransport':
-        """새로운 Watch 스트림을 생성하여 파이프라인에 연결"""
         url = f"{self.base_url}{path}"
         transport = KubeWatchTransport(self.pipeline, self.http_client, url)
         self.transports.append(transport)
@@ -133,68 +204,23 @@ class KubeBound(BaseBoundary):
         """@desc: 자원 누수 없는 우아한 붕괴(Graceful Shutdown) 처리"""
         self.log.info("## @trace.teardown: Collapsing KubeBound async space...")
         
-        # 1. 모든 Watch 스트림 정지
         for transport in self.transports:
             transport.disconnect()
             
-        # 2. 비동기 HTTP 클라이언트 세션 종료
         loop = asyncio.get_event_loop()
         if loop.is_running():
             loop.create_task(self.http_client.aclose())
         else:
             loop.run_until_complete(self.http_client.aclose())
 
-"""TRANSPORT & CHANNELS"""
-class KubeWatchTransport:
-    """@desc: K8s Watch API의 HTTP Chunk 스트림을 읽어 파이프라인으로 주입하는 Async Transport"""
-    def __init__(self, pipeline: ChannelPipeline, client: httpx.AsyncClient, url: str):
-        self.pipeline = pipeline
-        self.client = client
-        self.url = url
-        self.is_running = False
-        self._task: Optional[asyncio.Task] = None
-        self.log = get_emitter("kube.transport")
-
-    async def connect(self) -> None:
-        self.is_running = True
-        await self.pipeline.fire_channel_active()
-        self._task = asyncio.create_task(self._stream_watch())
-
-    async def _stream_watch(self) -> None:
-        try:
-            # httpx를 활용한 네이티브 비동기 스트림 (블로킹 없음)
-            async with self.client.stream("GET", self.url) as response:
-                response.raise_for_status()
-                async for chunk in response.aiter_bytes():
-                    if not self.is_running:
-                        break
-                    if chunk:
-                        # 파이프라인으로 원시 바이트(Bytes) 주입 
-                        # -> 이후 JsonMessageCodec이 처리하여 Dict로 변환함
-                        await self.pipeline._process_read(chunk)
-                        
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            self.log.error(f"  [TRANSPORT_FAULT] Stream interrupted: {e}")
-            await self.pipeline._process_exception(e)
-
-    def disconnect(self) -> None:
-        self.is_running = False
-        if self._task and not self._task.done():
-            self._task.cancel()
 
 class IsoEngineChannel(DuplexChannel):
-    """
-    @desc: 
-    - Threading 무한루프를 버리고 Network Pipeline 구조에 완벽히 융합된 이벤트 라우터
-    - 수신된 JSON(Watch Event)을 분석하여 선언적 데코레이터 함수로 바인딩
-    """
+    """@desc: Threading 무한루프를 버리고 Network Pipeline 구조에 완벽히 융합된 이벤트 라우터"""
     def __init__(self, client: AsyncKubeClient):
         self.client = client
         self.create_h, self.timer_h = [], []
         self._processed = set()
-        self._tasks = []  # 백그라운드 타이머 태스크 관리용
+        self._tasks = []
 
     def on_create(self, res: str, labels: dict = None):
         def dec(func): self.create_h.append((res, labels or {}, func)); return func
@@ -221,16 +247,13 @@ class IsoEngineChannel(DuplexChannel):
         ] if k in sig}
         
         try:
-            # 핸들러가 async 함수인지 확인 후 안전하게 실행
             if inspect.iscoroutinefunction(func): await func(**kwargs)
             else: func(**kwargs)
         except Exception as e: 
-            log.error(f"Handler '{func.__name__}' failed: {e}")
+            kube_log.error(f"Handler '{func.__name__}' failed: {e}")
 
-    # --- Pipeline Channel Implementations ---
     async def channel_active(self, ctx: ChannelContext):
-        """파이프라인 연결(Ignite) 시 타이머 태스크들을 이벤트 루프에 등록"""
-        log.info("[Supervisor] 점화 시퀀스 개시 (ISO Engine Channel)")
+        kube_log.info("[Supervisor] 점화 시퀀스 개시 (ISO Engine Channel)")
         await self.client.validate()
         
         for res, labels, intv, func in self.timer_h:
@@ -240,34 +263,26 @@ class IsoEngineChannel(DuplexChannel):
         await ctx.fire_channel_active()
 
     async def channel_inactive(self, ctx: ChannelContext):
-        """파이프라인 정지(Collapse) 시 모든 타이머 태스크 취소 (우아한 종료)"""
-        log.info("[Supervisor] ISO Engine 가동 중지 신호 수신")
+        kube_log.info("[Supervisor] ISO Engine 가동 중지 신호 수신")
         for task in self._tasks:
             if not task.done(): task.cancel()
         await self.client.close()
         await ctx.fire_channel_inactive()
 
     async def channel_read(self, ctx: ChannelContext, msg: any):
-        """
-        JsonMessageCodec을 거쳐 들어온 K8s Watch Event(Dict)를 수신합니다.
-        스레드 기반의 _watch 루프를 완벽히 대체하는 이벤트 드리븐 로직입니다.
-        """
         if isinstance(msg, dict) and msg.get('type') == 'ADDED':
             obj = msg.get('object', {})
-            kind = obj.get('kind', '').lower() + "s"  # 예: ConfigMap -> configmaps
+            kind = obj.get('kind', '').lower() + "s"
             
             for res, labels, func in self.create_h:
-                # 리소스 타입 매칭 및 라벨 필터링 처리
                 if res == kind:
                     obj_labels = obj.get("metadata", {}).get("labels", {})
                     if all(obj_labels.get(k) == v for k, v in labels.items()):
                         await self._inject(func, obj)
                         
-        # 로직 처리 후 다음 파이프라인 채널로 메시지 패스(Bypass)
         await ctx.fire_channel_read(msg)
 
     async def _run_timers(self, res: str, labels: dict, interval: float, func):
-        """스레드를 대체하는 Asyncio 네이티브 타이머 루프"""
         ls = ",".join(f"{k}={v}" for k, v in labels.items())
         try:
             while True:
@@ -279,50 +294,46 @@ class IsoEngineChannel(DuplexChannel):
         except asyncio.CancelledError:
             pass
 
-"""AUDITORS & ADAPTERS"""
+
+# =====================================================================
+# 5. AUDITORS (Observation Layer)
+# =====================================================================
+
 class KubeStreamAuditor(BaseStreamAuditor, DuplexChannel):
-    """@desc: Queue와 Thread 통신 방식을 버리고, 자신 스스로가 파이프라인의 끝단 채널(Channel)이 되어 이벤트를 수신하는 모듈"""
+    """@desc: 자신이 파이프라인의 끝단 채널이 되어 이벤트를 수신하는 모듈"""
     def __init__(self, target: str, boundary: KubeBound, watch_path: str):
         super().__init__(target, boundary, delay=0)
         self.watch_path = watch_path
         self._transport: Optional[KubeWatchTransport] = None
         
     def attach(self) -> None:
-        # 1. 자기 자신을 Boundary 파이프라인의 핸들러로 등록
         self.boundary.pipeline.add_last(self)
-        # 2. 전용 Transport 스트림 생성
         self._transport = self.boundary.attach_stream(self.watch_path)
         super().attach()
 
     async def run_stream(self) -> None:
-        # Transport 스트리밍 엔진 점화
         if self._transport:
             await self._transport.connect()
             
         try:
-            # BaseStreamAuditor의 라이프사이클 유지를 위한 무한 대기 (실제 처리는 channel_read에서 발생)
             while True:
                 await asyncio.sleep(3600)
         except asyncio.CancelledError:
             if self._transport:
                 self._transport.disconnect()
 
-    # --- DuplexChannel Implementation ---
     async def channel_read(self, ctx: ChannelContext, msg: Any) -> None:
-        """@desc: 파이프라인을 타고 넘어온 JSON 객체 수신"""
         if isinstance(msg, dict):
-            # 비즈니스 로직(K8s Event 분석) 실행
             await self.process_kube_event(msg)
             
-        # 다음 채널이 있다면 통과(Bypass)
         await ctx.fire_channel_read(msg)
 
     async def process_kube_event(self, event: dict) -> None:
-        """자식 클래스에서 오버라이드하여 비즈니스 상태 변화 처리"""
         pass 
 
+
 class ApiToposAuditor(BaseAuditor):
-    """@desc: 네이티브 비동기(httpx)를 적용하여 완전히 Non-blocking으로 동작하는 ToposAuditor"""
+    """@desc: 네이티브 비동기(httpx)를 적용하여 Non-blocking으로 동작하는 ToposAuditor"""
     def __init__(self, target: str, namespace: str, boundary: KubeBound):
         super().__init__(target, namespace, boundary)
         self.current_replicas = 0
@@ -333,7 +344,6 @@ class ApiToposAuditor(BaseAuditor):
             while True:
                 try:
                     path = f"/apis/apps/v1/namespaces/{self.namespace}/deployments"
-                    # 완전한 비동기 호출 (스레드풀 미사용)
                     response = await self.boundary.api_call('GET', path, params={"labelSelector": f"app={self.target}"})
                     
                     if response and response.get("items"):
@@ -346,8 +356,12 @@ class ApiToposAuditor(BaseAuditor):
                 await asyncio.sleep(2)
                 
         except asyncio.CancelledError:
-            # Tracer의 collapse() 발생 시 정상 종료
             pass
+
+
+# =====================================================================
+# 6. ADAPTERS (Actuation Layer)
+# =====================================================================
 
 class KubeScaleAdapter(IScaleAdapter):
     """@desc: 추상화된 스케일 명령을 실제 K8s Deployment 패치(Patch) API로 변환하는 브릿지"""
@@ -371,7 +385,6 @@ class KubeScaleAdapter(IScaleAdapter):
             }
         }
         try:
-            # AsyncKubeClient의 동적 엔트리 라우터를 활용한 PATCH 요청
             path = self.client.get_entry("deployments", ns=self.namespace, name=target_resource)
             await self.client.request('PATCH', path, payload=patch_payload)
             self.log.info(f"Successfully scaled K8s Deployment '{target_resource}' to {replicas}.")
@@ -379,3 +392,106 @@ class KubeScaleAdapter(IScaleAdapter):
         except Exception as e:
             self.log.error(f"Failed to scale K8s Deployment '{target_resource}': {e}")
             return False
+
+
+# =====================================================================
+# 7. BUSINESS LOGIC (Emitters & Proactors)
+# =====================================================================
+
+@contract.ator("scale.emitter")
+class ScaleEmitter(IPhaseAtor):
+    """@desc: 제어 시그널(Ψ')을 해석하여 인프라 밀도를 변조하고, 결과를 상태장(Field)에 피드백하는 액추에이터"""
+    def __init__(self, ator_id: str = "runtime.morpher", adapter: Optional[IScaleAdapter] = None, **kwargs):
+        self._id = ator_id
+        self._state = "IDLE"
+        self._initialized = False
+        self.adapter = adapter 
+        self.phase_map = kwargs.get("phase_map", {
+            "Φ0": 3,  # 기본 팽창
+            "∂Φ": 1,  # 잉여 수축
+            "Φ4": 0   # 감각/방어 수축
+        })
+
+    @property
+    def ator_id(self) -> str: return self._id
+    
+    @property
+    def state(self) -> str: return self._state
+    
+    def set_state(self, new_state: str) -> None: self._state = new_state
+
+    async def _ensure_initialized(self):
+        if self._initialized or not self.adapter: return
+        await self.adapter.initialize()
+        self._initialized = True
+        scale_log.info(f"[Φ(t)] Scale Adapter initialized for Projector ({self._id}).")
+
+    async def react(self, event: PsiEvent, field: IPhaseField, bus: AsyncEventBus) -> None:
+        # [Fix] Carrier 검증 강화
+        if not event.carrier or event.carrier.kind not in ("AWS_SCALE_REQUEST", "ACTION_SCALE"):
+            return
+
+        carrier = event.carrier
+        target_resource = carrier.tag
+        target_phase = carrier.payload
+
+        scale_log.info(f"[Φ(t) Modulation] Signal {event.event_id} routing '{target_resource}' to Phase '{target_phase}'")
+        replicas = self.phase_map.get(target_phase)
+        
+        if replicas is None or not self.adapter:
+            scale_log.error(f"[Actuation Error] Missing Phase Map or Adapter for {self._id}")
+            return
+
+        await self._ensure_initialized()
+        
+        # 1. 물리적 인프라 제어 (Actuation)
+        success = await self.adapter.apply_scale(target_resource, replicas)
+        
+        # 2. 제어 성공 시 닫힌 피드백 루프(Closed-Loop) 형성
+        if success:
+            self.set_state(f"PROJECTED_{target_phase}")
+            # [Fix] 누락되었던 피드백 이벤트 발행 (ToposField가 이를 수신함)
+            await bus.publish(PsiEvent(
+                event_id=f"applied-{uuid.uuid4().hex[:4]}",
+                event_type="action.scale.applied",  # 확정 시그널
+                parent_id=event.event_id,
+                source_id=self._id,
+                scope="feedback",
+                tick=event.tick,
+                payload={"target": target_resource, "replicas": replicas, "phase": target_phase}
+            ))
+
+
+class ScaleProactor(IPhaseAtor):
+    """@desc: 분석 결과를 바탕으로 물리적 스케일링 위상(Phase) 전환을 결정"""
+    def __init__(self, ator_id: str):
+        self._id = ator_id
+        self.log = get_emitter(f"ator.{ator_id}", phase="PRAXIS")
+
+    @property
+    def ator_id(self): return self._id
+    
+    @property
+    def state(self): return {}
+
+    async def react(self, event: PsiEvent, field, bus):
+        # [Fix] 분석 완료 이벤트 수신 대기
+        if event.event_type != "metric.lens_analyzed":
+            return
+
+        m = event.payload["metrics"]
+        rid = event.payload["target"]
+        
+        if m.get("trend", 0) > 0.4 and m.get("acceleration", 0) > 0.05:
+            self.log.warn(f"[ACT] Proactive scaling triggered for {rid} -> Phase: Φ0")
+            
+            carrier = PsiCarrier(kind="ACTION_SCALE", tag=rid, payload="Φ0")
+            await bus.publish(PsiEvent(
+                event_id=f"cmd-{uuid.uuid4().hex[:4]}",
+                event_type="action.scale.intent",
+                parent_id=event.event_id,
+                source_id=self._id,
+                scope="actuation",
+                tick=event.tick,
+                carrier=carrier
+            ))
