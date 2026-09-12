@@ -1,11 +1,11 @@
 # xphi.state.inter.wasm
-## @lineage: xphi.kernel.phase.inter.wasm
 import json
 import os
 import threading
+import struct
 from os import PathLike
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, Union, Optional, List, Dict
 
 try:
     import wasmtime
@@ -24,6 +24,7 @@ log = get_emitter("inter.wasm", phase="SYSTEM")
 _GLOBAL_ENGINE = None
 _GLOBAL_MODULE_CACHE = {}
 _CACHE_LOCK = threading.Lock()
+
 
 def get_cached_module(wasm_path: str, cg_policy: WasmCgroup):
     global _GLOBAL_ENGINE, _GLOBAL_MODULE_CACHE
@@ -47,11 +48,13 @@ class WasmInterpreter:
     def __init__(
         self,
         wasm_module_path: str = "dphi.wasm",
-        enable_read_paths: list[PathLike | str] | None = None,
-        enable_write_paths: list[PathLike | str] | None = None,
-        enable_env_vars: list[str] | None = None,
+        enable_read_paths: Optional[List[Union[PathLike, str]]] = None,
+        enable_write_paths: Optional[List[Union[PathLike, str]]] = None,
+        enable_env_vars: Optional[List[str]] = None,
         sync_files: bool = True,
-        policy: CgroupPolicy | None = None,
+        policy: Optional[CgroupPolicy] = None,
+        abi: str = "standard",
+        initial_state: Optional[Dict[str, str]] = None,
     ) -> None:
         if wasmtime is None:
             raise ImportError("The 'wasmtime' module is required. Please install it.")
@@ -61,6 +64,12 @@ class WasmInterpreter:
         self.enable_write_paths = enable_write_paths or []
         self.enable_env_vars = enable_env_vars or []
         self.sync_files = sync_files
+        self.abi = abi
+
+        # CosmWasm State
+        initial_state_dict = initial_state or {}
+        self.state_db = {k.encode('utf-8'): v.encode('utf-8') for k, v in initial_state_dict.items()}
+        self.state_diff: Dict[str, Optional[str]] = {}
 
         self.engine = None
         self.store = None
@@ -68,6 +77,7 @@ class WasmInterpreter:
         self.instance = None
         self.memory = None
         
+        # Pointers & Exports
         self._wasm_alloc = None
         self._wasm_dealloc = None
         self._wasm_invoke = None
@@ -92,7 +102,7 @@ class WasmInterpreter:
 
     def _ensure_engine_started(self) -> None:
         if self.instance is not None:
-             return
+            return
              
         try:
             self.engine, self.module = get_cached_module(self.wasm_module_path, self.cg)
@@ -103,12 +113,12 @@ class WasmInterpreter:
             for path in self.enable_read_paths:
                 wasi_config.preopen_dir(str(path), f"/sandbox/read/{os.path.basename(str(path))}")
             for path in self.enable_write_paths:
-                 wasi_config.preopen_dir(str(path), f"/sandbox/write/{os.path.basename(str(path))}")
+                wasi_config.preopen_dir(str(path), f"/sandbox/write/{os.path.basename(str(path))}")
             
             env = []
             for var in self.enable_env_vars:
-                 if var in os.environ:
-                     env.append((var, os.environ[var]))
+                if var in os.environ:
+                    env.append((var, os.environ[var]))
             wasi_config.env = env
             
             self.store = wasmtime.Store(self.engine)
@@ -118,30 +128,154 @@ class WasmInterpreter:
             linker = wasmtime.Linker(self.engine)
             linker.define_wasi()
 
+            if self.abi == "cosmwasm":
+                self._bind_cosmwasm_host_functions(linker)
+
             self.instance = linker.instantiate(self.store, self.module)
             self.memory = self.instance.exports(self.store)["memory"]
             
             exports = self.instance.exports(self.store)
             
-            self._wasm_alloc = exports.get("alloc")
-            self._wasm_dealloc = exports.get("dealloc")
-            self._wasm_invoke = exports.get("invoke_wasm")
-            
-            if not self._wasm_alloc or not self._wasm_dealloc or not self._wasm_invoke:
-                raise ProtocolError("WASM module missing legacy memory exports")
+            if self.abi == "cosmwasm":
+                self._wasm_alloc = exports.get("allocate")
+                self._wasm_dealloc = exports.get("deallocate")
+                self._wasm_invoke = exports.get("execute")
+            else:
+                self._wasm_alloc = exports.get("alloc")
+                self._wasm_dealloc = exports.get("dealloc")
+                self._wasm_invoke = exports.get("invoke_wasm")
+                
+                if not self._wasm_alloc or not self._wasm_dealloc or not self._wasm_invoke:
+                    raise ProtocolError("WASM module missing legacy memory exports")
 
-            self._get_ptr = exports.get("get_shared_buffer_ptr")
-            self._get_size = exports.get("get_shared_buffer_size")
-            self._invoke_shared = exports.get("invoke_shared")
-            
-            if self._get_ptr and self._get_size and self._invoke_shared:
-                self.shared_ptr = self._get_ptr(self.store)
-                self.shared_size = self._get_size(self.store)
+                self._get_ptr = exports.get("get_shared_buffer_ptr")
+                self._get_size = exports.get("get_shared_buffer_size")
+                self._invoke_shared = exports.get("invoke_shared")
+                
+                if self._get_ptr and self._get_size and self._invoke_shared:
+                    self.shared_ptr = self._get_ptr(self.store)
+                    self.shared_size = self._get_size(self.store)
 
         except Exception as e:
             raise ProtocolError(f"Failed to initialize Wasmtime engine: {e}")
 
-    def _run_wasm_function(self, target_func_name: str, payload: Any, context: dict | None = None) -> str:
+    # =========================================================================
+    # CosmWasm Memory & Host Function Extensions
+    # =========================================================================
+    def _read_region(self, caller: Any, ptr: int) -> bytes:
+        memory = self.memory if isinstance(caller, wasmtime.Store) else caller.get("memory")
+        region_header = bytes(memory.read(caller, ptr, ptr + 12))
+        
+        # XML 파서 버그를 피하기 위해 포맷 문자열 안전하게 생성
+        fmt = "<" + "III"
+        offset, capacity, length = struct.unpack(fmt, region_header)
+        return bytes(memory.read(caller, offset, offset + length))
+
+    def _write_to_region(self, caller: Any, data: bytes) -> int:
+        region_ptr = self._wasm_alloc(caller, len(data))
+        memory = self.memory if isinstance(caller, wasmtime.Store) else caller.get("memory")
+        
+        region_header = bytes(memory.read(caller, region_ptr, region_ptr + 12))
+        
+        # XML 파서 버그를 피하기 위해 포맷 문자열 안전하게 생성
+        fmt = "<" + "III"
+        offset, capacity, length = struct.unpack(fmt, region_header)
+        
+        memory.write(caller, data, offset)
+        
+        len_fmt = "<" + "I"
+        memory.write(caller, struct.pack(len_fmt, len(data)), region_ptr + 8) 
+        
+        return region_ptr
+
+    def _prepare_json_arg(self, data_dict: dict) -> int:
+        json_bytes = json.dumps(data_dict).encode('utf-8')
+        return self._write_to_region(self.store, json_bytes)
+
+    def _bind_cosmwasm_host_functions(self, linker: Any) -> None:
+        def db_read_cb(key_ptr: int) -> int:
+            key_bytes = self._read_region(self.store, key_ptr)
+            val_bytes = self.state_db.get(key_bytes)
+            if val_bytes is None:
+                return 0 
+            return self._write_to_region(self.store, val_bytes)
+
+        def db_write_cb(key_ptr: int, val_ptr: int) -> None:
+            key_bytes = self._read_region(self.store, key_ptr)
+            val_bytes = self._read_region(self.store, val_ptr)
+            self.state_db[key_bytes] = val_bytes
+            self.state_diff[key_bytes.decode('utf-8', errors='ignore')] = val_bytes.decode('utf-8', errors='ignore')
+
+        def db_remove_cb(key_ptr: int) -> None:
+            key_bytes = self._read_region(self.store, key_ptr)
+            self.state_db.pop(key_bytes, None)
+            self.state_diff[key_bytes.decode('utf-8', errors='ignore')] = None
+
+        def dummy_i32(*args: Any) -> int:
+            return 0
+
+        def dummy_i64(*args: Any) -> int:
+            return 0
+
+        def dummy_void(*args: Any) -> None:
+            pass
+
+        i32 = wasmtime.ValType.i32()
+        i64 = wasmtime.ValType.i64()
+        
+        linker.define_func("env", "db_read", wasmtime.FuncType([i32], [i32]), db_read_cb)
+        linker.define_func("env", "db_write", wasmtime.FuncType([i32, i32], []), db_write_cb)
+        linker.define_func("env", "db_remove", wasmtime.FuncType([i32], []), db_remove_cb)
+        linker.define_func("env", "db_scan", wasmtime.FuncType([i32, i32, i32], [i32]), dummy_i32)
+        linker.define_func("env", "db_next", wasmtime.FuncType([i32], [i32]), dummy_i32)
+        linker.define_func("env", "query_chain", wasmtime.FuncType([i32], [i32]), dummy_i32)
+        linker.define_func("env", "debug", wasmtime.FuncType([i32], []), dummy_void)
+        linker.define_func("env", "abort", wasmtime.FuncType([i32], []), dummy_void)
+        
+        linker.define_func("env", "addr_validate", wasmtime.FuncType([i32], [i32]), dummy_i32)
+        linker.define_func("env", "addr_canonicalize", wasmtime.FuncType([i32, i32], [i32]), dummy_i32)
+        linker.define_func("env", "addr_humanize", wasmtime.FuncType([i32, i32], [i32]), dummy_i32)
+        
+        linker.define_func("env", "secp256k1_verify", wasmtime.FuncType([i32, i32, i32], [i32]), dummy_i32)
+        linker.define_func("env", "secp256k1_recover_pubkey", wasmtime.FuncType([i32, i32, i32], [i64]), dummy_i64)
+        linker.define_func("env", "ed25519_verify", wasmtime.FuncType([i32, i32, i32], [i32]), dummy_i32)
+        linker.define_func("env", "ed25519_batch_verify", wasmtime.FuncType([i32, i32, i32], [i32]), dummy_i32)
+
+    def invoke_cosmwasm(self, env_data: dict, info_data: dict, msg_data: dict) -> ExecutionResult:
+        try:
+            self._ensure_engine_started()
+            
+            env_ptr = self._prepare_json_arg(env_data)
+            info_ptr = self._prepare_json_arg(info_data)
+            msg_ptr = self._prepare_json_arg(msg_data)
+            
+            res_ptr = self._wasm_invoke(self.store, env_ptr, info_ptr, msg_ptr)
+            
+            result_bytes = self._read_region(self.store, res_ptr)
+            result_json = json.loads(result_bytes.decode('utf-8'))
+            
+            if self._wasm_dealloc:
+                self._wasm_dealloc(self.store, res_ptr)
+                
+            response_payload = {
+                "success": True,
+                "gas_used": 0,
+                "output": result_json,
+                "state_diff": self.state_diff,
+                "logs": [],
+                "revert_reason": None
+            }
+            
+            return ExecutionResult(success=True, output=json.dumps(response_payload))
+            
+        except Exception as e:
+            log.error(f"CosmWasm Execution Failed: {e}", exc_info=True)
+            return ExecutionResult(success=False, error=ExecutionError(f"Execute Fatal: {str(e)}"))
+
+    # =========================================================================
+    # Standard DPHI Execution
+    # =========================================================================
+    def _run_wasm_function(self, target_func_name: str, payload: Any, context: Optional[dict] = None) -> str:
         self._ensure_engine_started()
         
         actual_payload = payload
@@ -190,7 +324,7 @@ class WasmInterpreter:
                 if res_ptr is not None and res_len_legacy is not None:
                     self._wasm_dealloc(self.store, res_ptr, res_len_legacy)
 
-    def invoke(self, target_func: str, payload: str, context: dict | None = None) -> ExecutionResult:
+    def invoke(self, target_func: str, payload: str, context: Optional[dict] = None) -> ExecutionResult:
         self.current_timestamp = float(context.get("timestamp", 0.0)) if context else 0.0
         try:
             result_str = self._run_wasm_function(target_func, payload, context=context)
@@ -206,31 +340,39 @@ class WasmInterpreter:
     def execute(
         self,
         code: str,
-        variables: Mapping[str, Any] | None = None,
-        callables: Mapping[str, Callable[..., Any]] | None = None,
-        context: dict | None = None,
+        variables: Optional[Mapping[str, Any]] = None,
+        callables: Optional[Mapping[str, Callable[..., Any]]] = None,
+        context: Optional[dict] = None,
     ) -> ExecutionResult:
         variables = variables or {}
         self.current_timestamp = float(context.get("timestamp", 0.0)) if context else 0.0
         
         try:
-             result_str = self._run_wasm_function("execute_code", {"code": code, "variables": variables}, context=context)
-             result_data = json.loads(result_str)
+            result_str = self._run_wasm_function("execute_code", {"code": code, "variables": variables}, context=context)
+            result_data = json.loads(result_str)
              
-             if result_data.get("success", False):
-                 inner_data = result_data.get("data", {})
-                 return ExecutionResult(success=True, output=inner_data.get("output", ""))
-             else:
-                 return ExecutionResult(success=False, error=ExecutionError(result_data.get("error", "Error")))
+            if result_data.get("success", False):
+                inner_data = result_data.get("data", {})
+                return ExecutionResult(success=True, output=inner_data.get("output", ""))
+            else:
+                return ExecutionResult(success=False, error=ExecutionError(result_data.get("error", "Error")))
         except Exception as e:
-             return ExecutionResult(success=False, error=ExecutionError(f"WASM Execution Failed: {e}"))
+            return ExecutionResult(success=False, error=ExecutionError(f"WASM Execution Failed: {e}"))
 
     def get_metrics(self) -> dict:
-        if not self.store or not self.memory: return {}
+        if not self.store or not self.memory:
+            return {}
         return self.cg.inspect_metrics(self.store, self.memory)
 
     def shutdown(self) -> None:
-        self.engine = self.store = self.module = self.instance = self.memory = None
+        self.engine = None
+        self.store = None
+        self.module = None
+        self.instance = None
+        self.memory = None
 
-    def __enter__(self): return self
-    def __exit__(self, *_): self.shutdown()
+    def __enter__(self) -> "WasmInterpreter":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.shutdown()

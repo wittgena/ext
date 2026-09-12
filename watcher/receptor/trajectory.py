@@ -1,5 +1,4 @@
 # xphi.watcher.receptor.trajectory
-## @lineage: fiber.infra.oracle.observer.trajectory
 import os
 import time
 import math

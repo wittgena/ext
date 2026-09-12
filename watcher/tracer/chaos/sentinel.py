@@ -11,7 +11,7 @@ import httpx
 from aiohttp import web
 from pydantic import BaseModel, Field, ValidationError
 
-from xphi.watcher.server.stream.schema import (
+from xphi.arch.model.edge.stream import (
     ActionIntent,
     LogicPayload,
     LogicStream,
@@ -21,7 +21,7 @@ from xphi.watcher.server.stream.schema import (
 )
 from xphi.watcher.plane.emitter import flow_scope, get_emitter
 from xphi.watcher.plane.observer.span import span_context
-from xphi.watcher.tracer.chaos.gateway import ToposGateway
+from xphi.state.ledger.gateway import StoreGateway
 
 log = get_emitter("ingress.sentinel", phase="DEFENSE")
 
@@ -139,7 +139,7 @@ class SecurityContext:
 
 
 class MembraneProjector:
-    def __init__(self, gateway: ToposGateway):
+    def __init__(self, gateway: StoreGateway):
         self.gateway = gateway
         self.rules: Dict[str, MetaRuleDef] = {}
 
@@ -293,7 +293,7 @@ class RpcChaosInjector:
 
 class IngressRouter:
     """@desc: Internal router acting as the live target for the Sentinel."""
-    def __init__(self, gateway: ToposGateway):
+    def __init__(self, gateway: StoreGateway):
         self.validator = SpecValidator()
         self.gateway = gateway
 
@@ -362,5 +362,5 @@ def get_projector() -> MembraneProjector:
     """Singleton factory for the MembraneProjector."""
     global _projector_instance
     if _projector_instance is None:
-        _projector_instance = MembraneProjector(ToposGateway())
+        _projector_instance = MembraneProjector(StoreGateway())
     return _projector_instance
